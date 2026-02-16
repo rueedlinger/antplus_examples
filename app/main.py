@@ -15,6 +15,7 @@ def metrics(sensors=[]):
     except KeyboardInterrupt:
         m.stop()
 
+
 def list_sensors():
     m = SensorScanner()
     m.start()
@@ -25,11 +26,11 @@ def list_sensors():
     except KeyboardInterrupt:
         m.stop()
 
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING)
     logging.getLogger("app.ant").setLevel(logging.INFO)
-    
-    
+
     option = (
         input("Enter option (a: auto detect, c: custom, l: list): ").lower().strip()
     )

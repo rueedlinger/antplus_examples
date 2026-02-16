@@ -48,7 +48,9 @@ class SensorScanner:
         try:
             self.node = Node()
             self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
-            self.scanner = Scanner(self.node, device_id=self.device_id, device_type=self.device_type)
+            self.scanner = Scanner(
+                self.node, device_id=self.device_id, device_type=self.device_type
+            )
             self.scanner.on_found = self._scanner_on_found
         except Exception as e:
             self.logger.warning(
@@ -71,7 +73,7 @@ class SensorScanner:
 
     def get_devices(self):
         return self.devices
-    
+
     def _run_node(self):
         try:
             self.logger.debug("Starting ANT+ node")
@@ -240,7 +242,11 @@ class Metrics:
 
     def _on_device_data(self, page: int, page_name: str, data: DeviceData):
         try:
-            self.logger.debug("Received data from device - Page: {}, Page Name: {}, Data: {}".format(page, page_name, data))
+            self.logger.debug(
+                "Received data from device - Page: {}, Page Name: {}, Data: {}".format(
+                    page, page_name, data
+                )
+            )
 
             if isinstance(data, BikeCadenceData):
                 self.cadence = data.calculate_cadence()
@@ -262,7 +268,7 @@ class Metrics:
         device_id, device_type, device_trans = device_tuple
 
         self.logger.debug(
-            f"Found device - ID: {device_id}, Type: {device_type}, Trans: {device_trans}"      
+            f"Found device - ID: {device_id}, Type: {device_type}, Trans: {device_trans}"
         )
 
         if DeviceType(device_type) in (
@@ -272,8 +278,10 @@ class Metrics:
             DeviceType.HeartRate,
             DeviceType.PowerMeter,
         ):
-            try:               
-                self.logger.info(f"Auto-creating device for ID: {device_id}, Type: {device_type}")
+            try:
+                self.logger.info(
+                    f"Auto-creating device for ID: {device_id}, Type: {device_type}"
+                )
                 dev: AntPlusDevice = auto_create_device(
                     self.node, device_id, device_type, device_trans
                 )
@@ -299,7 +307,9 @@ class Metrics:
     def _cleanup_devices(self):
         for dev in self.devices:
             try:
-                self.logger.debug(f"Closing channel for device ID: {dev.device_id}, Type: {dev.device_type}")
+                self.logger.debug(
+                    f"Closing channel for device ID: {dev.device_id}, Type: {dev.device_type}"
+                )
                 dev.close_channel()
             except Exception:
                 self.logger.warning("Could not close device channel", exc_info=True)
