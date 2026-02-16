@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 import logging
-import sys
 import threading
 from typing import List
 from openant.easy.node import Node
@@ -42,13 +41,39 @@ class Sensor:
     sensor_type: SensorType = None
 
 
+class ScannerDevice:
+    def __init__(self):
+        self.device_id = None
+        self.device_type = None
+        self.node = None
+        self.node_thread = None
+        self.logger = logging.getLogger("app.scanner_device")
+
+    def start(self):
+        try:
+            self.node = Node()
+            self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
+        except Exception as e:
+            self.logger.warning(
+                "Error initializing ANT+ node or scanner", exc_info=True
+            )
+            self.node.stop() if self.node else None
+            raise e
+
+        self.node_thread = threading.Thread(target=self._run_node, daemon=True)
+        self.node_thread.start()
+
+    def stop(self):
+        pass
+
+
 class Metrics:
     def __init__(self, sensors: List[Sensor] = [], wheel_circumference_m=0.141):
-        self.power = 0
-        self.speed = 0
-        self.cadence = 0
-        self.distance = 0
-        self.heart_rate = 0
+        self.power = None
+        self.speed = None
+        self.cadence = None
+        self.distance = None
+        self.heart_rate = None
         self.wheel_circumference_m = wheel_circumference_m
         self.node = None
         self.node_thread = None
@@ -143,7 +168,7 @@ class Metrics:
         if self.node_thread:
             self.node_thread.join()
 
-    def to_dict(self):
+    def get_metrics(self):
         return {
             "power": self.power,
             "speed": self.speed,
@@ -152,29 +177,15 @@ class Metrics:
             "heart_rate": self.heart_rate,
         }
 
-    def display(self):
-        # Clear previous lines (optional: one line for devices, one for stats)
-        sys.stdout.write("\033[2J\033[H")  # Clear screen and move cursor to top
-
-        # Print all registered devices
-        if self.devices:
-            devices_info = ", ".join(
-                f"{device.name} ({device.device_id})" for device in self.devices
-            )
-            print(f"Registered Devices: {devices_info}")
-        else:
-            print("Registered Devices: None")
-
-        # Print live stats on the next line
-        sys.stdout.write(
-            "\r"  # Carriage return
-            f"Power: {self.power or '--'} W | "
-            f"Speed: {fmt(self.speed)} km/h | "
-            f"Cadence: {fmt(self.cadence)} rpm | "
-            f"Distance: {fmt(self.distance)} m | "
-            f"Heart Rate: {self.heart_rate or '--'} bpm\n"
-        )
-        sys.stdout.flush()
+    def get_devices(self):
+        return [
+            {
+                "device_id": dev.device_id,
+                "device_type": dev.device_type,
+                "name": dev.name,
+            }
+            for dev in self.devices
+        ]
 
     def _on_device_data(self, page: int, page_name: str, data: DeviceData):
         try:

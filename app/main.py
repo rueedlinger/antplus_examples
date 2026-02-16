@@ -8,8 +8,10 @@ def metrics(sensors=[]):
     m.start()
     try:
         while True:
-            m.display()
-            sleep(0.1)
+            # m.display()
+            print(m.get_devices())
+            print(m.get_metrics())
+            sleep(0.5)
     except KeyboardInterrupt:
         m.stop()
 
