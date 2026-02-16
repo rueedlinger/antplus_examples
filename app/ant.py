@@ -1,13 +1,20 @@
+from dataclasses import dataclass
+from enum import Enum
+import logging
 import sys
 import threading
+from typing import List
 from openant.easy.node import Node
 from openant.devices import ANTPLUS_NETWORK_KEY
 from openant.devices.bike_speed_cadence import (
     BikeSpeedData,
+    BikeSpeed,
     BikeCadenceData,
+    BikeCadence,
+    BikeSpeedCadence,
 )
-from openant.devices.heart_rate import HeartRateData
-from openant.devices.power_meter import PowerData
+from openant.devices.heart_rate import HeartRateData, HeartRate
+from openant.devices.power_meter import PowerData, PowerMeter
 from openant.devices.common import AntPlusDevice, DeviceData
 from openant.devices.common import DeviceType
 from openant.devices.scanner import Scanner
@@ -21,14 +28,32 @@ def fmt(val, decimals=2):
     return f"{val:.{decimals}f}"
 
 
-class Monitor:
-    def __init__(self, wheel_circumference_m=0.141):
+class SensorType(Enum):
+    BIKE_SPEED = "BIKE_SPEED"
+    BIKE_CADENCE = "BIKE_CADENCE"
+    BIKE_CADENCE_SPEED = "BIKE_CADENCE_SPEED"
+    HEART_RATE = "HEART_RATE"
+    POWER_METER = "POWER_METER"
+
+
+@dataclass
+class Sensor:
+    device_id: int = 0
+    sensor_type: SensorType = None
+
+
+class Metrics:
+    def __init__(self, sensors: List[Sensor] = [], wheel_circumference_m=0.141):
         self.power = 0
         self.speed = 0
         self.cadence = 0
         self.distance = 0
         self.heart_rate = 0
         self.wheel_circumference_m = wheel_circumference_m
+        self.node = None
+        self.node_thread = None
+        self.sensors = sensors
+        self.logger = logging.getLogger("app.metrics")
 
     def start(self):
         try:
@@ -36,11 +61,69 @@ class Monitor:
             self.node = Node()
             self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
 
-            self.scanner = Scanner(self.node, device_id=0, device_type=0)
-            self.scanner.on_found = self._on_found
+            if self.sensors is None or len(self.sensors) == 0:
+                self.logger.info(
+                    "No sensors specified, starting scanner for all devices"
+                )
+                self.scanner = Scanner(self.node, device_id=0, device_type=0)
+                self.scanner.on_found = self._scanner_on_found
+            else:
+                self.logger.info(
+                    f"Custom sensors specified: {[sensor.sensor_type for sensor in self.sensors]}"
+                )
+                for sensor in self.sensors:
+                    self.logger.debug(f"Starting with specified sensor: {sensor}")
+
+                    if sensor.sensor_type == SensorType.BIKE_SPEED:
+                        dev = BikeSpeed(self.node, device_id=sensor.device_id)
+                        dev.on_device_data = lambda page, page_name, data: (
+                            self._on_device_data(page, page_name, data)
+                        )
+                        dev.on_found = lambda: self._on_device_found()
+                        self.devices.append(dev)
+
+                    elif sensor.sensor_type == SensorType.BIKE_CADENCE:
+                        dev = BikeCadence(self.node, device_id=sensor.device_id)
+                        dev.on_device_data = lambda page, page_name, data: (
+                            self._on_device_data(page, page_name, data)
+                        )
+                        dev.on_found = lambda: self._on_device_found()
+                        self.devices.append(dev)
+
+                    elif sensor.sensor_type == SensorType.BIKE_CADENCE_SPEED:
+                        dev = BikeSpeedCadence(self.node, device_id=sensor.device_id)
+                        dev.on_device_data = lambda page, page_name, data: (
+                            self._on_device_data(page, page_name, data)
+                        )
+                        dev.on_found = lambda: self._on_device_found()
+                        self.devices.append(dev)
+
+                    elif sensor.sensor_type == SensorType.HEART_RATE:
+                        dev = HeartRate(self.node, device_id=sensor.device_id)
+                        dev.on_device_data = lambda page, page_name, data: (
+                            self._on_device_data(page, page_name, data)
+                        )
+                        dev.on_found = lambda: self._on_device_found()
+                        self.devices.append(dev)
+
+                    elif sensor.sensor_type == SensorType.POWER_METER:
+                        dev = PowerMeter(self.node, device_id=sensor.device_id)
+                        dev.on_device_data = lambda page, page_name, data: (
+                            self._on_device_data(page, page_name, data)
+                        )
+                        dev.on_found = lambda: self._on_device_found()
+                        self.devices.append(dev)
+
+                    else:
+                        # Unknown sensor type, log a warning
+                        self.logger.warning(
+                            f"Unknown sensor type: {sensor.sensor_type}"
+                        )
 
         except Exception as e:
-            print(f"Error initializing ANT+ node or scanner: {e}")
+            self.logger.warning(
+                "Error initializing ANT+ node or scanner", exc_info=True
+            )
             self.node.stop() if self.node else None
             raise e
 
@@ -51,12 +134,23 @@ class Monitor:
         self._cleanup_devices()
 
         try:
-            self.node.stop()
+            if self.node:
+                self.node.stop()
         except Exception:
+            self.logger.warning("Error stopping ANT+ node", exc_info=True)
             pass
 
         if self.node_thread:
             self.node_thread.join()
+
+    def to_dict(self):
+        return {
+            "power": self.power,
+            "speed": self.speed,
+            "cadence": self.cadence,
+            "distance": self.distance,
+            "heart_rate": self.heart_rate,
+        }
 
     def display(self):
         # Clear previous lines (optional: one line for devices, one for stats)
@@ -64,8 +158,10 @@ class Monitor:
 
         # Print all registered devices
         if self.devices:
-            device_names = ", ".join(device.name for device in self.devices)
-            print(f"Registered Devices: {device_names}")
+            devices_info = ", ".join(
+                f"{device.name} ({device.device_id})" for device in self.devices
+            )
+            print(f"Registered Devices: {devices_info}")
         else:
             print("Registered Devices: None")
 
@@ -95,11 +191,12 @@ class Monitor:
             if isinstance(data, PowerData):
                 self.power = data.average_power
 
-        except Exception as e:
-            print(f"Error processing device data update: {e}")
+        except Exception:
+            self.logger.warning("Error processing device data update", exc_info=True)
 
-    def _on_found(self, device_tuple):
+    def _scanner_on_found(self, device_tuple):
         device_id, device_type, device_trans = device_tuple
+
         if DeviceType(device_type) in (
             DeviceType.BikeCadence,
             DeviceType.BikeSpeed,
@@ -109,7 +206,7 @@ class Monitor:
         ):
             try:
                 # TODO cehck device ids
-                dev = auto_create_device(
+                dev: AntPlusDevice = auto_create_device(
                     self.node, device_id, device_type, device_trans
                 )
 
@@ -118,20 +215,23 @@ class Monitor:
                     page, page_name, data
                 )
                 self.devices.append(dev)
-            except Exception as e:
-                print(f"Could not auto create device: {e}")
+            except Exception:
+                self.logger.warning("Could not auto create device", exc_info=True)
+
+    def _on_device_found(self):
+        self.logger.debug("Found new device")
 
     def _run_node(self):
         try:
             self.node.start()  # blocking
-        except Exception as e:
-            print("Node error:", e)
+        except Exception:
+            self.logger.warning("Node error", exc_info=True)
 
     def _cleanup_devices(self):
         for dev in self.devices:
             try:
                 dev.close_channel()
             except Exception:
-                pass
+                self.logger.warning("Could not close device channel", exc_info=True)
 
         self.devices.clear()
