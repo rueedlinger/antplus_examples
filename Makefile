@@ -34,8 +34,8 @@ test:
 	uv run coverage html
 	uv run coverage report -m
 	
-run:
-	uv run python -m app.main
+cli:
+	uv run python -m app.cli
 
 ci: sync check test
 
