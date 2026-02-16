@@ -21,16 +21,10 @@ from openant.devices.scanner import Scanner
 from openant.devices.utilities import auto_create_device
 
 
-def fmt(val, decimals=2):
-    if val is None:
-        return "--"
-    return f"{val:.{decimals}f}"
-
-
 class SensorType(Enum):
     BIKE_SPEED = "BIKE_SPEED"
     BIKE_CADENCE = "BIKE_CADENCE"
-    BIKE_CADENCE_SPEED = "BIKE_CADENCE_SPEED"
+    BIKE_SPEED_CADENCE = "BIKE_SPEED_CADENCE"
     HEART_RATE = "HEART_RATE"
     POWER_METER = "POWER_METER"
 
@@ -41,18 +35,21 @@ class Sensor:
     sensor_type: SensorType = None
 
 
-class ScannerDevice:
+class SensorScanner:
     def __init__(self):
-        self.device_id = None
-        self.device_type = None
+        self.device_id = 0
+        self.device_type = 0
         self.node = None
         self.node_thread = None
-        self.logger = logging.getLogger("app.scanner_device")
+        self.logger = logging.getLogger("app.ant.scanner")
+        self.devices: List[Sensor] = []
 
     def start(self):
         try:
             self.node = Node()
             self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
+            self.scanner = Scanner(self.node, device_id=self.device_id, device_type=self.device_type)
+            self.scanner.on_found = self._scanner_on_found
         except Exception as e:
             self.logger.warning(
                 "Error initializing ANT+ node or scanner", exc_info=True
@@ -64,7 +61,59 @@ class ScannerDevice:
         self.node_thread.start()
 
     def stop(self):
-        pass
+        try:
+            if self.node:
+                self.logger.debug("Stopping ANT+ node")
+                self.node.stop()
+        except Exception:
+            self.logger.warning("Error stopping ANT+ node", exc_info=True)
+            pass
+
+    def get_devices(self):
+        return self.devices
+    
+    def _run_node(self):
+        try:
+            self.logger.debug("Starting ANT+ node")
+            self.node.start()  # blocking
+        except Exception:
+            self.logger.warning("Node error", exc_info=True)
+
+    def _scanner_on_found(self, device_tuple):
+        device_id, device_type, device_trans = device_tuple
+
+        self.logger.debug(
+            f"Found device - ID: {device_id}, Type: {device_type}, Trans: {device_trans}"
+        )
+
+        if DeviceType(device_type) == DeviceType.BikeCadence:
+            self.devices.append(
+                Sensor(device_id=device_id, sensor_type=SensorType.BIKE_CADENCE)
+            )
+
+        elif DeviceType(device_type) == DeviceType.BikeSpeed:
+            self.devices.append(
+                Sensor(device_id=device_id, sensor_type=SensorType.BIKE_SPEED)
+            )
+
+        elif DeviceType(device_type) == DeviceType.BikeSpeedCadence:
+            self.devices.append(
+                Sensor(device_id=device_id, sensor_type=SensorType.BIKE_SPEED_CADENCE)
+            )
+
+        elif DeviceType(device_type) == DeviceType.HeartRate:
+            self.devices.append(
+                Sensor(device_id=device_id, sensor_type=SensorType.HEART_RATE)
+            )
+
+        elif DeviceType(device_type) == DeviceType.PowerMeter:
+            self.devices.append(
+                Sensor(device_id=device_id, sensor_type=SensorType.POWER_METER)
+            )
+
+        else:
+            # Unknown device type, log a warning
+            self.logger.warning(f"Unknown device type found: {device_type}")
 
 
 class Metrics:
@@ -78,7 +127,7 @@ class Metrics:
         self.node = None
         self.node_thread = None
         self.sensors = sensors
-        self.logger = logging.getLogger("app.metrics")
+        self.logger = logging.getLogger("app.ant.metrics")
 
     def start(self):
         try:
@@ -115,7 +164,7 @@ class Metrics:
                         dev.on_found = lambda: self._on_device_found()
                         self.devices.append(dev)
 
-                    elif sensor.sensor_type == SensorType.BIKE_CADENCE_SPEED:
+                    elif sensor.sensor_type == SensorType.BIKE_SPEED_CADENCE:
                         dev = BikeSpeedCadence(self.node, device_id=sensor.device_id)
                         dev.on_device_data = lambda page, page_name, data: (
                             self._on_device_data(page, page_name, data)
@@ -160,6 +209,7 @@ class Metrics:
 
         try:
             if self.node:
+                self.logger.debug("Stopping ANT+ node")
                 self.node.stop()
         except Exception:
             self.logger.warning("Error stopping ANT+ node", exc_info=True)
@@ -175,6 +225,7 @@ class Metrics:
             "cadence": self.cadence,
             "distance": self.distance,
             "heart_rate": self.heart_rate,
+            "wheel_circumference_m": self.wheel_circumference_m,
         }
 
     def get_devices(self):
@@ -189,6 +240,8 @@ class Metrics:
 
     def _on_device_data(self, page: int, page_name: str, data: DeviceData):
         try:
+            self.logger.debug("Received data from device - Page: {}, Page Name: {}, Data: {}".format(page, page_name, data))
+
             if isinstance(data, BikeCadenceData):
                 self.cadence = data.calculate_cadence()
 
@@ -208,6 +261,10 @@ class Metrics:
     def _scanner_on_found(self, device_tuple):
         device_id, device_type, device_trans = device_tuple
 
+        self.logger.debug(
+            f"Found device - ID: {device_id}, Type: {device_type}, Trans: {device_trans}"      
+        )
+
         if DeviceType(device_type) in (
             DeviceType.BikeCadence,
             DeviceType.BikeSpeed,
@@ -215,8 +272,8 @@ class Metrics:
             DeviceType.HeartRate,
             DeviceType.PowerMeter,
         ):
-            try:
-                # TODO cehck device ids
+            try:               
+                self.logger.info(f"Auto-creating device for ID: {device_id}, Type: {device_type}")
                 dev: AntPlusDevice = auto_create_device(
                     self.node, device_id, device_type, device_trans
                 )
@@ -234,6 +291,7 @@ class Metrics:
 
     def _run_node(self):
         try:
+            self.logger.debug("Starting ANT+ node")
             self.node.start()  # blocking
         except Exception:
             self.logger.warning("Node error", exc_info=True)
@@ -241,6 +299,7 @@ class Metrics:
     def _cleanup_devices(self):
         for dev in self.devices:
             try:
+                self.logger.debug(f"Closing channel for device ID: {dev.device_id}, Type: {dev.device_type}")
                 dev.close_channel()
             except Exception:
                 self.logger.warning("Could not close device channel", exc_info=True)
