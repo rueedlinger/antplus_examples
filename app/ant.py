@@ -35,20 +35,23 @@ class Metrics:
             self.logger.warning(
                 f"Invalid wheel circumference value: {circumference_m}. Must be > 0."
             )
-            return
+            raise ValueError("Wheel circumference must be a positive number")
         self.logger.debug(f"Wheel circumference updated to {circumference_m} m")
         self.wheel_circumference_m = circumference_m
 
     def set_filter_device_ids(self, filter_device_ids: List[int]):
-        if filter_device_ids is None:
-            filter_device_ids = []
+        
 
         # Validate that all entries are integers
         if not all(isinstance(id, int) for id in filter_device_ids):
             self.logger.warning(
                 f"Invalid filter_device_ids: {filter_device_ids}. All entries must be integers."
             )
-            return
+            raise ValueError("All device IDs in filter_device_ids must be integers")
+        
+        if filter_device_ids is None:
+            filter_device_ids = []
+
         self.filter_device_ids = filter_device_ids
         self.logger.debug(f"Device ID filter updated: {filter_device_ids}")
 
@@ -109,7 +112,7 @@ class Metrics:
             "is_running": self.is_running,
         }
         if round_values:
-            for key in ["power", "speed", "cadence", "distance"]:
+            for key in ["power", "speed", "cadence", "distance", "heart_rate"]:
                 if metrics[key] is not None:
                     metrics[key] = round(metrics[key], 2)
         return metrics
