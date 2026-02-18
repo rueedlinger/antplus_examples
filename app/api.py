@@ -1,4 +1,5 @@
 import asyncio
+import time
 import json
 import logging
 from typing import Optional
@@ -65,6 +66,7 @@ def start_metrics():
             return {"message": "Metrics collection started"}
         except Exception as e:
             logging.warning(f"Failed to start metrics (attempt {attempt}): {str(e)}")
+            time.sleep(0.5)  # brief pause before retrying
 
     # If all retries failed, raise HTTPException
     raise HTTPException(
