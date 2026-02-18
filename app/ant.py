@@ -130,95 +130,112 @@ class Metrics:
         self.node_thread = None
         self.sensors = sensors
         self.logger = logging.getLogger("app.ant.metrics")
+        self.is_running = False
+        self.lock = threading.Lock()
+        self.devices: List[AntPlusDevice] = []
 
     def start(self):
-        try:
-            self.devices: list[AntPlusDevice] = []
-            self.node = Node()
-            self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
+        with self.lock:  # acquire and release automatically
+            if self.is_running:
+                self.logger.warning("Metrics collection already running")
+                return
 
-            if self.sensors is None or len(self.sensors) == 0:
-                self.logger.info(
-                    "No sensors specified, starting scanner for all devices"
+            try:
+                self.devices: list[AntPlusDevice] = []
+                self.node = Node()
+                self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
+
+                if self.sensors is None or len(self.sensors) == 0:
+                    self.logger.info(
+                        "No sensors specified, starting scanner for all devices"
+                    )
+                    self.scanner = Scanner(self.node, device_id=0, device_type=0)
+                    self.scanner.on_found = self._scanner_on_found
+                else:
+                    self.logger.info(
+                        f"Custom sensors specified: {[sensor.sensor_type for sensor in self.sensors]}"
+                    )
+                    for sensor in self.sensors:
+                        self.logger.debug(f"Starting with specified sensor: {sensor}")
+
+                        if sensor.sensor_type == SensorType.BIKE_SPEED:
+                            dev = BikeSpeed(self.node, device_id=sensor.device_id)
+                            dev.on_device_data = lambda page, page_name, data: (
+                                self._on_device_data(page, page_name, data)
+                            )
+                            dev.on_found = lambda: self._on_device_found()
+                            self.devices.append(dev)
+
+                        elif sensor.sensor_type == SensorType.BIKE_CADENCE:
+                            dev = BikeCadence(self.node, device_id=sensor.device_id)
+                            dev.on_device_data = lambda page, page_name, data: (
+                                self._on_device_data(page, page_name, data)
+                            )
+                            dev.on_found = lambda: self._on_device_found()
+                            self.devices.append(dev)
+
+                        elif sensor.sensor_type == SensorType.BIKE_SPEED_CADENCE:
+                            dev = BikeSpeedCadence(
+                                self.node, device_id=sensor.device_id
+                            )
+                            dev.on_device_data = lambda page, page_name, data: (
+                                self._on_device_data(page, page_name, data)
+                            )
+                            dev.on_found = lambda: self._on_device_found()
+                            self.devices.append(dev)
+
+                        elif sensor.sensor_type == SensorType.HEART_RATE:
+                            dev = HeartRate(self.node, device_id=sensor.device_id)
+                            dev.on_device_data = lambda page, page_name, data: (
+                                self._on_device_data(page, page_name, data)
+                            )
+                            dev.on_found = lambda: self._on_device_found()
+                            self.devices.append(dev)
+
+                        elif sensor.sensor_type == SensorType.POWER_METER:
+                            dev = PowerMeter(self.node, device_id=sensor.device_id)
+                            dev.on_device_data = lambda page, page_name, data: (
+                                self._on_device_data(page, page_name, data)
+                            )
+                            dev.on_found = lambda: self._on_device_found()
+                            self.devices.append(dev)
+
+                        else:
+                            # Unknown sensor type, log a warning
+                            self.logger.warning(
+                                f"Unknown sensor type: {sensor.sensor_type}"
+                            )
+
+            except Exception as e:
+                self.logger.warning(
+                    "Error initializing ANT+ node or scanner", exc_info=True
                 )
-                self.scanner = Scanner(self.node, device_id=0, device_type=0)
-                self.scanner.on_found = self._scanner_on_found
-            else:
-                self.logger.info(
-                    f"Custom sensors specified: {[sensor.sensor_type for sensor in self.sensors]}"
-                )
-                for sensor in self.sensors:
-                    self.logger.debug(f"Starting with specified sensor: {sensor}")
+                self.node.stop() if self.node else None
+                raise e
 
-                    if sensor.sensor_type == SensorType.BIKE_SPEED:
-                        dev = BikeSpeed(self.node, device_id=sensor.device_id)
-                        dev.on_device_data = lambda page, page_name, data: (
-                            self._on_device_data(page, page_name, data)
-                        )
-                        dev.on_found = lambda: self._on_device_found()
-                        self.devices.append(dev)
-
-                    elif sensor.sensor_type == SensorType.BIKE_CADENCE:
-                        dev = BikeCadence(self.node, device_id=sensor.device_id)
-                        dev.on_device_data = lambda page, page_name, data: (
-                            self._on_device_data(page, page_name, data)
-                        )
-                        dev.on_found = lambda: self._on_device_found()
-                        self.devices.append(dev)
-
-                    elif sensor.sensor_type == SensorType.BIKE_SPEED_CADENCE:
-                        dev = BikeSpeedCadence(self.node, device_id=sensor.device_id)
-                        dev.on_device_data = lambda page, page_name, data: (
-                            self._on_device_data(page, page_name, data)
-                        )
-                        dev.on_found = lambda: self._on_device_found()
-                        self.devices.append(dev)
-
-                    elif sensor.sensor_type == SensorType.HEART_RATE:
-                        dev = HeartRate(self.node, device_id=sensor.device_id)
-                        dev.on_device_data = lambda page, page_name, data: (
-                            self._on_device_data(page, page_name, data)
-                        )
-                        dev.on_found = lambda: self._on_device_found()
-                        self.devices.append(dev)
-
-                    elif sensor.sensor_type == SensorType.POWER_METER:
-                        dev = PowerMeter(self.node, device_id=sensor.device_id)
-                        dev.on_device_data = lambda page, page_name, data: (
-                            self._on_device_data(page, page_name, data)
-                        )
-                        dev.on_found = lambda: self._on_device_found()
-                        self.devices.append(dev)
-
-                    else:
-                        # Unknown sensor type, log a warning
-                        self.logger.warning(
-                            f"Unknown sensor type: {sensor.sensor_type}"
-                        )
-
-        except Exception as e:
-            self.logger.warning(
-                "Error initializing ANT+ node or scanner", exc_info=True
-            )
-            self.node.stop() if self.node else None
-            raise e
-
-        self.node_thread = threading.Thread(target=self._run_node, daemon=True)
-        self.node_thread.start()
+            self.node_thread = threading.Thread(target=self._run_node, daemon=True)
+            self.node_thread.start()
+            self.is_running = True
 
     def stop(self):
-        self._cleanup_devices()
+        with self.lock:
+            if not self.is_running:
+                self.logger.warning("Metrics collection already stopped")
+                return
 
-        try:
-            if self.node:
-                self.logger.debug("Stopping ANT+ node")
-                self.node.stop()
-        except Exception:
-            self.logger.warning("Error stopping ANT+ node", exc_info=True)
-            pass
+            self.is_running = False
+            self._cleanup_devices()
 
-        if self.node_thread:
-            self.node_thread.join()
+            try:
+                if self.node:
+                    self.logger.debug("Stopping ANT+ node")
+                    self.node.stop()
+            except Exception:
+                self.logger.warning("Error stopping ANT+ node", exc_info=True)
+                pass
+
+            if self.node_thread:
+                self.node_thread.join()
 
     def get_metrics(self):
         return {
@@ -228,6 +245,7 @@ class Metrics:
             "distance": self.distance,
             "heart_rate": self.heart_rate,
             "wheel_circumference_m": self.wheel_circumference_m,
+            "is_running": self.is_running,
         }
 
     def get_devices(self):
@@ -300,8 +318,10 @@ class Metrics:
     def _run_node(self):
         try:
             self.logger.debug("Starting ANT+ node")
+            self.is_running = True
             self.node.start()  # blocking
         except Exception:
+            self.is_running = False
             self.logger.warning("Node error", exc_info=True)
 
     def _cleanup_devices(self):

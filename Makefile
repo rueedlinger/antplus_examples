@@ -37,6 +37,12 @@ test:
 cli:
 	uv run python -m app.cli
 
+run-fast:
+	@echo "Running FastAPI app on http://127.0.0.1:8000"
+	uv run uvicorn app.api:app --reload
+
+run: run-fast
+
 ci: sync check test
 
 clean:
