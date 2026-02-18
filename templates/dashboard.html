@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metrics Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- Control Buttons Card -->
+    <div class="bg-white rounded-xl shadow-md p-6 flex flex-col items-center space-y-4">
+      <h2 class="text-xl font-semibold text-gray-800 mb-2 text-center">Control Metrics</h2>
+      <div class="flex space-x-4">
+        <button id="start-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Start</button>
+        <button id="stop-btn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Stop</button>
+      </div>
+      <div id="control-response" class="text-gray-800 font-medium mt-2"></div>
+    </div>
+
+    <!-- Live Metrics Card -->
+    <div class="bg-white rounded-xl shadow-md p-6">
+      <h1 class="text-2xl font-bold text-gray-800 mb-4 text-center">Live Metrics</h1>
+
+      <div class="grid grid-cols-2 gap-4" id="metrics-grid">
+        <div class="flex justify-between">
+          <span class="font-medium text-gray-700">Power:</span>
+          <span class="text-gray-900" id="power">—</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="font-medium text-gray-700">Speed:</span>
+          <span class="text-gray-900" id="speed">—</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="font-medium text-gray-700">Cadence:</span>
+          <span class="text-gray-900" id="cadence">—</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="font-medium text-gray-700">Distance:</span>
+          <span class="text-gray-900" id="distance">—</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="font-medium text-gray-700">Heart Rate:</span>
+          <span class="text-gray-900" id="heart_rate">—</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="font-medium text-gray-700">Wheel Circumference (m):</span>
+          <span class="text-gray-900" id="wheel_circumference_m">—</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="font-medium text-gray-700">Is Running:</span>
+          <span class="text-gray-900" id="is_running">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Devices Card -->
+    <div class="bg-white rounded-xl shadow-md p-6">
+      <h2 class="text-xl font-semibold text-gray-800 mb-4 text-center">Connected Devices</h2>
+      <ul class="divide-y divide-gray-200" id="devices-list">
+        <!-- Device items will be inserted here -->
+      </ul>
+    </div>
+
+  </div>
+
+  <script>
+    // ---- SSE for live metrics ----
+    const metricsSource = new EventSource("/metrics/stream");
+
+    metricsSource.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        document.getElementById("power").textContent = data.power ?? "—";
+        document.getElementById("speed").textContent = data.speed ?? "—";
+        document.getElementById("cadence").textContent = data.cadence ?? "—";
+        document.getElementById("distance").textContent = data.distance ?? "—";
+        document.getElementById("heart_rate").textContent = data.heart_rate ?? "—";
+        document.getElementById("wheel_circumference_m").textContent = data.wheel_circumference_m ?? "—";
+        document.getElementById("is_running").textContent = data.is_running ? "Yes" : "No";
+      } catch (err) {
+        console.error("Failed to parse SSE metrics:", err);
+      }
+    };
+
+    metricsSource.onerror = function(err) {
+      console.error("SSE metrics connection error:", err);
+      metricsSource.close();
+    };
+
+    // ---- SSE for live devices ----
+    const devicesSource = new EventSource("/metrics/devices/stream");
+
+    devicesSource.onmessage = function(event) {
+      try {
+        const devices = JSON.parse(event.data);
+        const devicesList = document.getElementById("devices-list");
+        devicesList.innerHTML = ""; // clear current list
+
+        devices.forEach(dev => {
+          const li = document.createElement("li");
+          li.className = "py-2 flex justify-between";
+          li.innerHTML = `
+            <span class="font-medium text-gray-700">${dev.name}</span>
+            <span class="text-gray-900">ID: ${dev.device_id}, Type: ${dev.device_type}</span>
+          `;
+          devicesList.appendChild(li);
+        });
+      } catch (err) {
+        console.error("Failed to parse SSE devices:", err);
+      }
+    };
+
+    devicesSource.onerror = function(err) {
+      console.error("SSE devices connection error:", err);
+      devicesSource.close();
+    };
+
+    // ---- Start/Stop Buttons ----
+    async function postControl(endpoint) {
+      try {
+        const response = await fetch(endpoint, { method: "POST" });
+        const text = await response.text();  // plain text response
+        document.getElementById("control-response").textContent = text;
+      } catch (err) {
+        document.getElementById("control-response").textContent = "Error: " + err;
+        console.error(err);
+      }
+    }
+
+    document.getElementById("start-btn").addEventListener("click", () => postControl("/metrics/start"));
+    document.getElementById("stop-btn").addEventListener("click", () => postControl("/metrics/stop"));
+
+  </script>
+
+</body>
+</html>

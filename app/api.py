@@ -3,8 +3,10 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from app.ant import Metrics
@@ -20,10 +22,12 @@ async def lifespan(app: FastAPI):
     yield
     # ---- shutdown ----
     if app.state.metrics:
-        app.state.metrics.stop()
+        #app.state.metrics.stop()
+        pass
 
 
-app = FastAPI(title="ANT+ Service", lifespan=lifespan)
+app = FastAPI(title="ANT+ Metrics Service", lifespan=lifespan)
+templates = Jinja2Templates(directory="templates")
 
 
 class SensorModel(BaseModel):
@@ -49,13 +53,19 @@ class MetricsResponse(BaseModel):
 
 @app.post("/metrics/start")
 def start_metrics():
-    try:
-        app.state.metrics.start()
-        return {"message": "Metrics collection started"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start metrics: {str(e)}"
-        )
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            app.state.metrics.start()
+            return {"message": "Metrics collection started"}
+        except Exception as e:
+            logging.warning(f"Failed to start metrics (attempt {attempt}): {str(e)}")
+
+    # If all retries failed, raise HTTPException
+    raise HTTPException(
+        status_code=500,
+        detail=f"Failed to start metrics after {max_retries} attempts"
+    )
 
 
 @app.post("/metrics/stop")
@@ -111,3 +121,33 @@ async def metrics_event_generator():
 @app.get("/metrics/stream")
 async def stream_metrics():
     return StreamingResponse(metrics_event_generator(), media_type="text/event-stream")
+
+
+async def device_event_generator():
+    last_devices = []
+    while True:
+        try:
+            # Get current devices from app state
+            devices = app.state.metrics.get_devices()  # returns list of dicts
+            # Only yield if changed
+            if devices != last_devices:
+                last_devices = devices
+                yield f"data: {json.dumps(devices)}\n\n"
+            await asyncio.sleep(1)  # adjust frequency as needed
+        except asyncio.CancelledError:
+            # client disconnected
+            break
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            await asyncio.sleep(1)
+
+@app.get("/metrics/devices/stream")
+async def stream_devices():
+    return StreamingResponse(
+        device_event_generator(),
+        media_type="text/event-stream"
+    )
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard(request: Request):
+    return templates.TemplateResponse("dashboard.html", {"request": request})

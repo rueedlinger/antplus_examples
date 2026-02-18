@@ -237,16 +237,21 @@ class Metrics:
             if self.node_thread:
                 self.node_thread.join()
 
-    def get_metrics(self):
-        return {
+    def get_metrics(self, round_values=True):
+        metrics = {
             "power": self.power,
             "speed": self.speed,
-            "cadence": self.cadence,
+            "cadence":  self.cadence,
             "distance": self.distance,
             "heart_rate": self.heart_rate,
             "wheel_circumference_m": self.wheel_circumference_m,
             "is_running": self.is_running,
         }
+        if round_values:
+            for key in ["power", "speed", "cadence", "distance"]:
+                if metrics[key] is not None:
+                    metrics[key] = round(metrics[key], 2)
+        return metrics
 
     def get_devices(self):
         return [
