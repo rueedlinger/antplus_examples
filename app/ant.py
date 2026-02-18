@@ -18,19 +18,17 @@ from openant.devices.utilities import auto_create_device
 
 class Metrics:
     def __init__(self, filter_device_ids: List[int] = [], wheel_circumference_m=0.141):
-        self.power = None
-        self.speed = None
-        self.cadence = None
-        self.distance = None
-        self.heart_rate = None
-        self.wheel_circumference_m = wheel_circumference_m
+        self.logger = logging.getLogger("app.ant.metrics")
+
         self.node = None
         self.node_thread = None
-        self.filter_device_ids = filter_device_ids
-        self.logger = logging.getLogger("app.ant.metrics")
-        self.is_running = False
         self.lock = threading.Lock()
         self.devices: List[AntPlusDevice] = []
+
+        self.wheel_circumference_m = self.set_wheel_circumference(wheel_circumference_m)
+        self.filter_device_ids = self.set_filter_device_ids(filter_device_ids)
+        self._reset_metrics()
+        self.is_running = False
 
     def set_wheel_circumference(self, circumference_m):
         if circumference_m <= 0:
@@ -40,6 +38,19 @@ class Metrics:
             return
         self.logger.debug(f"Wheel circumference updated to {circumference_m} m")
         self.wheel_circumference_m = circumference_m
+
+    def set_filter_device_ids(self, filter_device_ids: List[int]):
+        if filter_device_ids is None:
+            filter_device_ids = []
+
+        # Validate that all entries are integers
+        if not all(isinstance(id, int) for id in filter_device_ids):
+            self.logger.warning(
+                f"Invalid filter_device_ids: {filter_device_ids}. All entries must be integers."
+            )
+            return
+        self.filter_device_ids = filter_device_ids
+        self.logger.debug(f"Device ID filter updated: {filter_device_ids}")
 
     def start(self):
         with self.lock:  # acquire and release automatically
