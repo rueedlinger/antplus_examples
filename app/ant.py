@@ -134,6 +134,15 @@ class Metrics:
         self.lock = threading.Lock()
         self.devices: List[AntPlusDevice] = []
 
+    def set_wheel_circumference(self, circumference_m):
+        if circumference_m <= 0:
+            self.logger.warning(
+                f"Invalid wheel circumference value: {circumference_m}. Must be > 0."
+            )
+            return
+        self.logger.debug(f"Wheel circumference updated to {circumference_m} m")
+        self.wheel_circumference_m = circumference_m
+
     def start(self):
         with self.lock:  # acquire and release automatically
             if self.is_running:
@@ -237,11 +246,13 @@ class Metrics:
             if self.node_thread:
                 self.node_thread.join()
 
+            self._reset_metrics()
+
     def get_metrics(self, round_values=True):
         metrics = {
             "power": self.power,
             "speed": self.speed,
-            "cadence":  self.cadence,
+            "cadence": self.cadence,
             "distance": self.distance,
             "heart_rate": self.heart_rate,
             "wheel_circumference_m": self.wheel_circumference_m,
@@ -252,6 +263,13 @@ class Metrics:
                 if metrics[key] is not None:
                     metrics[key] = round(metrics[key], 2)
         return metrics
+
+    def _reset_metrics(self):
+        self.power = None
+        self.speed = None
+        self.cadence = None
+        self.distance = None
+        self.heart_rate = None
 
     def get_devices(self):
         return [

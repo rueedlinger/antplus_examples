@@ -6,8 +6,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.ant import Metrics
 from contextlib import asynccontextmanager
@@ -22,12 +21,18 @@ async def lifespan(app: FastAPI):
     yield
     # ---- shutdown ----
     if app.state.metrics:
-        #app.state.metrics.stop()
+        # app.state.metrics.stop()
         pass
 
 
 app = FastAPI(title="ANT+ Metrics Service", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
+
+
+class WheelCircumferenceUpdate(BaseModel):
+    wheel_circumference_m: float = Field(
+        ..., gt=0, description="Wheel circumference in meters"
+    )
 
 
 class SensorModel(BaseModel):
@@ -63,8 +68,7 @@ def start_metrics():
 
     # If all retries failed, raise HTTPException
     raise HTTPException(
-        status_code=500,
-        detail=f"Failed to start metrics after {max_retries} attempts"
+        status_code=500, detail=f"Failed to start metrics after {max_retries} attempts"
     )
 
 
@@ -75,6 +79,17 @@ def stop_metrics():
         return {"message": "Metrics collection stopped"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stop metrics: {str(e)}")
+
+
+@app.post("/metrics/wheel_circumference")
+def update_wheel_circumference(payload: WheelCircumferenceUpdate):
+    try:
+        app.state.metrics.set_wheel_circumference(payload.wheel_circumference_m)
+        return {
+            "message": f"Wheel circumference updated to {payload.wheel_circumference_m} m"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update: {str(e)}")
 
 
 @app.get("/metrics", response_model=MetricsResponse)
@@ -141,12 +156,11 @@ async def device_event_generator():
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             await asyncio.sleep(1)
 
+
 @app.get("/metrics/devices/stream")
 async def stream_devices():
-    return StreamingResponse(
-        device_event_generator(),
-        media_type="text/event-stream"
-    )
+    return StreamingResponse(device_event_generator(), media_type="text/event-stream")
+
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):

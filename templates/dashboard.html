@@ -20,10 +20,22 @@
       <div id="control-response" class="text-gray-800 font-medium mt-2"></div>
     </div>
 
+    <!-- Wheel Circumference Card -->
+    <div class="bg-white rounded-xl shadow-md p-6 flex flex-col space-y-2">
+      <h2 class="text-xl font-semibold text-gray-800 mb-2 text-center">Update Wheel Circumference (m)</h2>
+      <div class="flex space-x-2 justify-center">
+        <input type="number" step="0.001" min="0" id="wheel-input"
+               class="border rounded px-2 py-1 w-32" placeholder="e.g. 0.141"/>
+        <button id="wheel-btn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          Update
+        </button>
+      </div>
+      <div id="wheel-response" class="text-gray-800 font-medium mt-1 text-center"></div>
+    </div>
+
     <!-- Live Metrics Card -->
     <div class="bg-white rounded-xl shadow-md p-6">
       <h1 class="text-2xl font-bold text-gray-800 mb-4 text-center">Live Metrics</h1>
-
       <div class="grid grid-cols-2 gap-4" id="metrics-grid">
         <div class="flex justify-between">
           <span class="font-medium text-gray-700">Power:</span>
@@ -67,9 +79,8 @@
   </div>
 
   <script>
-    // ---- SSE for live metrics ----
+    // --- SSE for live metrics ---
     const metricsSource = new EventSource("/metrics/stream");
-
     metricsSource.onmessage = function(event) {
       try {
         const data = JSON.parse(event.data);
@@ -84,20 +95,18 @@
         console.error("Failed to parse SSE metrics:", err);
       }
     };
-
     metricsSource.onerror = function(err) {
       console.error("SSE metrics connection error:", err);
       metricsSource.close();
     };
 
-    // ---- SSE for live devices ----
+    // --- SSE for live devices ---
     const devicesSource = new EventSource("/metrics/devices/stream");
-
     devicesSource.onmessage = function(event) {
       try {
         const devices = JSON.parse(event.data);
         const devicesList = document.getElementById("devices-list");
-        devicesList.innerHTML = ""; // clear current list
+        devicesList.innerHTML = "";
 
         devices.forEach(dev => {
           const li = document.createElement("li");
@@ -112,27 +121,42 @@
         console.error("Failed to parse SSE devices:", err);
       }
     };
-
     devicesSource.onerror = function(err) {
       console.error("SSE devices connection error:", err);
       devicesSource.close();
     };
 
-    // ---- Start/Stop Buttons ----
+    // --- Start / Stop Buttons ---
     async function postControl(endpoint) {
       try {
         const response = await fetch(endpoint, { method: "POST" });
-        const text = await response.text();  // plain text response
+        const text = await response.text();
         document.getElementById("control-response").textContent = text;
       } catch (err) {
         document.getElementById("control-response").textContent = "Error: " + err;
         console.error(err);
       }
     }
-
     document.getElementById("start-btn").addEventListener("click", () => postControl("/metrics/start"));
     document.getElementById("stop-btn").addEventListener("click", () => postControl("/metrics/stop"));
 
+    // --- Update Wheel Circumference ---
+    document.getElementById("wheel-btn").addEventListener("click", async () => {
+      const value = parseFloat(document.getElementById("wheel-input").value);
+      if (!value || value <= 0) { alert("Enter a valid wheel circumference (>0)"); return; }
+      try {
+        const response = await fetch("/metrics/wheel_circumference", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wheel_circumference_m: value })
+        });
+        const data = await response.json();
+        document.getElementById("wheel-response").textContent = data.message;
+      } catch (err) {
+        document.getElementById("wheel-response").textContent = "Error: " + err;
+        console.error(err);
+      }
+    });
   </script>
 
 </body>
