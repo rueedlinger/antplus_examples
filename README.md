@@ -1,4 +1,4 @@
-# ANT+ Examples with Python
+# ANT+ Metrics Service
 
 This repository contains examples of using the ANT+ protocol with the Python library [`openant`](https://github.com/Tigge/openant). 
 
@@ -11,7 +11,4 @@ The primary goal of these examples is to demonstrate how to implement a class fo
 - Distance
 - Power
 - Heart rate
-
-
-
 
