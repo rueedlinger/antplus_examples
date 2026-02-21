@@ -11,6 +11,16 @@
 
 <div id="app" class="max-w-5xl mx-auto space-y-6">
 
+  <!-- Floating Toasts -->
+  <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50">
+    <alert v-for="(toast, index) in toasts" 
+           :key="index" 
+           :type="toast.type" 
+           :title="toast.type === 'success' ? 'Success' : 'Error'" 
+           :message="toast.message" 
+           @close="removeToast(index)" />
+  </div>
+
   <!-- Control Card -->
   <div class="bg-white rounded-xl shadow-md p-6 text-center space-y-4">
     <h2 class="text-xl font-semibold">Control Metrics</h2>
@@ -18,11 +28,6 @@
       <button @click="startMetrics" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Start</button>
       <button @click="stopMetrics" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Stop</button>
     </div>
-    <alert v-if="controlMessage"
-           :type="controlMessageType"
-           :title="controlMessageType === 'success' ? 'Success' : 'Error'"
-           :message="controlMessage"
-           @close="controlMessage=''"/>
   </div>
 
   <!-- Settings Card -->
@@ -48,11 +53,6 @@
     <div class="text-center">
       <button @click="updateSettings" class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update Settings</button>
     </div>
-    <alert v-if="settingsMessage"
-           :type="settingsMessageType"
-           :title="settingsMessageType === 'success' ? 'Success' : 'Error'"
-           :message="settingsMessage"
-           @close="settingsMessage=''"/>
   </div>
 
   <!-- Live Metrics Table -->
@@ -101,22 +101,22 @@ createApp({
 
   components: {
     'metric-row': {
-  delimiters: ['[[', ']]'],   // add this line
-  props: ['label', 'value', 'inactive'],
-  template: `
-    <tr :class="inactive ? 'bg-gray-100 text-gray-400' : ''">
-      <td class="border border-gray-300 px-4 py-2 font-medium">[[ label ]]</td>
-      <td class="border border-gray-300 px-4 py-2">[[ value ?? '—' ]]</td>
-    </tr>
-  `
-},
+      delimiters: ['[[', ']]'],
+      props: ['label', 'value', 'inactive'],
+      template: `
+        <tr :class="inactive ? 'bg-gray-100 text-gray-400' : ''">
+          <td class="border border-gray-300 px-4 py-2 font-medium">[[ label ]]</td>
+          <td class="border border-gray-300 px-4 py-2">[[ value ?? '—' ]]</td>
+        </tr>
+      `
+    },
 
     'alert': {
       props: ['type','title','message'],
       emits: ['close'],
       delimiters: ['[[', ']]'],
       template: `
-        <div role="alert" class="mb-2 rounded-md overflow-hidden shadow">
+        <div role="alert" class="rounded-md shadow-lg overflow-hidden w-80">
           <div :class="headerClass" class="font-bold px-4 py-2 flex justify-between items-center">
             <span>[[ title ]]</span>
             <button @click="$emit('close')" class="font-bold ml-4">&times;</button>
@@ -128,15 +128,14 @@ createApp({
       `,
       computed: {
         headerClass() {
-          return this.type === 'success' ? 'bg-blue-500 text-white' : 'bg-red-500 text-white';
+          return this.type === 'success' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white';
         },
         bodyClass() {
           return this.type === 'success'
-            ? 'border border-t-0 border-blue-400 rounded-b bg-blue-100 text-blue-700'
-            : 'border border-t-0 border-red-400 rounded-b bg-red-100 text-red-700';
+            ? 'bg-blue-100 text-blue-800'
+            : 'bg-red-100 text-red-800';
         }
-      },
-      mounted() { setTimeout(() => this.$emit('close'), 5000); }
+      }
     }
   },
 
@@ -155,12 +154,9 @@ createApp({
       devices: [],
       settings: { speed_wheel_circumference_m: null, distance_wheel_circumference_m: null, age: null },
       lastValidSettings: {},
-      controlMessage: "",
-      controlMessageType: "",
-      settingsMessage: "",
-      settingsMessageType: "",
       metricsSource: null,
-      devicesSource: null
+      devicesSource: null,
+      toasts: []
     };
   },
 
@@ -173,22 +169,34 @@ createApp({
   },
 
   methods: {
+    showToast(message, type = "success") {
+      this.toasts.push({ message, type });
+      setTimeout(() => this.toasts.shift(), 5000);
+    },
+    removeToast(index) {
+      this.toasts.splice(index, 1);
+    },
+
     async startMetrics() {
       try {
         const res = await fetch("/metrics/start", { method: "POST" });
         const data = await res.json();
-        this.controlMessage = data.message;
-        this.controlMessageType = res.ok ? "success" : "error";
-      } catch { this.controlMessage = "Network error"; this.controlMessageType = "error"; }
+        if (!res.ok) throw new Error(data.message || res.statusText);
+        this.showToast(data.message, "success");
+      } catch (err) {
+        this.showToast(err.message || "Network error", "error");
+      }
     },
 
     async stopMetrics() {
       try {
         const res = await fetch("/metrics/stop", { method: "POST" });
         const data = await res.json();
-        this.controlMessage = data.message;
-        this.controlMessageType = res.ok ? "success" : "error";
-      } catch { this.controlMessage = "Network error"; this.controlMessageType = "error"; }
+        if (!res.ok) throw new Error(data.message || res.statusText);
+        this.showToast(data.message, "success");
+      } catch (err) {
+        this.showToast(err.message || "Network error", "error");
+      }
     },
 
     async updateSettings() {
@@ -198,28 +206,22 @@ createApp({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(this.settings)
         });
-        if (!res.ok) {
-          this.settingsMessageType = 'error';
-          this.settingsMessage = res.status === 422
-            ? "Validation error"
-            : "Error: " + res.statusText;
-          this.settings = { ...this.lastValidSettings };
-          return;
-        }
         const data = await res.json();
-        this.settingsMessage = data.message || "Settings updated";
-        this.settingsMessageType = "success";
+        if (!res.ok) {
+          this.settings = { ...this.lastValidSettings };
+          throw new Error(data.message || "Error: " + res.statusText);
+        }
         this.lastValidSettings = { ...this.settings };
+        this.showToast(data.message || "Settings updated", "success");
       } catch (err) {
-        this.settingsMessage = "Network error: " + err;
-        this.settingsMessageType = "error";
         this.settings = { ...this.lastValidSettings };
+        this.showToast(err.message || "Network error", "error");
       }
     },
 
     connectMetricsStream() {
       if (this.metricsSource) this.metricsSource.close();
-      this.metricsSource = new EventSource("http://127.0.0.1:8000/metrics/stream");
+      this.metricsSource = new EventSource("/metrics/stream");
       this.metricsSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
         for (let key in this.metrics) {
@@ -232,7 +234,7 @@ createApp({
 
     connectDevicesStream() {
       if (this.devicesSource) this.devicesSource.close();
-      this.devicesSource = new EventSource("http://127.0.0.1:8000/metrics/devices/stream");
+      this.devicesSource = new EventSource("/metrics/devices/stream");
       this.devicesSource.onmessage = (event) => { this.devices = JSON.parse(event.data); };
       this.devicesSource.onerror = (err) => { console.error("Devices SSE error", err); this.devicesSource.close(); };
     },
@@ -240,13 +242,13 @@ createApp({
     async loadSettings() {
       try {
         const res = await fetch("/metrics/settings");
-        if (res.ok) {
-          this.settings = await res.json();
-          this.lastValidSettings = { ...this.settings };
-        }
-      } catch (err) { console.error(err); }
+        if (!res.ok) throw new Error(res.statusText);
+        this.settings = await res.json();
+        this.lastValidSettings = { ...this.settings };
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      }
     }
-
   },
 
   mounted() {
