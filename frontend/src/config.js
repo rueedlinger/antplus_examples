@@ -1,6 +1,5 @@
-// src/config.js
 export const API = {
-  baseUrl: "http://127.0.0.1:8000", // e.g., "http://localhost:5000" or leave empty for same-origin
+  baseUrl: import.meta.env.VITE_API_BASE_URL || "",
 
   endpoints: {
     startMetrics: "/metrics/start",

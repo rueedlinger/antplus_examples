@@ -12,7 +12,6 @@
         @close="removeToast(index)"
       />
     </div>
-
     <!-- Control Card -->
     <div class="bg-white rounded-xl shadow-md p-6 text-center space-y-4">
       <h2 class="text-xl font-semibold">Control Metrics</h2>
@@ -130,6 +129,20 @@
       </ul>
     </div>
 
+    <!-- Footer -->
+<footer class="bg-gray-200 text-gray-700 text-center py-4 mt-6 rounded-xl shadow-inner">
+  <p>
+    Documentation: 
+    <a 
+      :href="API.baseUrl + '/docs'" 
+      target="_blank" 
+      class="text-blue-600 hover:underline"
+    >
+      Go to Docs
+    </a>
+  </p>
+</footer>
+
   </div>
 </template>
 
@@ -144,6 +157,7 @@ export default {
 
   data() {
     return {
+      API,
       metrics: { power: "—", speed: "—", cadence: "—", distance: "—", heart_rate: "—", heart_rate_percent: "—", zone: "Unknown", is_running: false },
       metricsLastUpdated: null,
       metricsConnected: true,
@@ -172,7 +186,7 @@ export default {
       const title = action ? `${action} - ${type === "success" ? "Success" : type === "error" ? "Error" : "Info"}` 
                            : type === "success" ? "Success" : type === "error" ? "Error" : "Info";
       this.toasts.push({ message, type, title });
-      setTimeout(() => this.toasts.shift(), 5000);
+      setTimeout(() => this.toasts.shift(), 2000);
     },
 
     removeToast(index) { this.toasts.splice(index, 1); },

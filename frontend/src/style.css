@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Apply pointer cursor to all buttons */
+button {
+  cursor: pointer; /* hand pointer */
+}
+
+/* Disabled buttons show not-allowed */
+button:disabled {
+  cursor: not-allowed;
+}
