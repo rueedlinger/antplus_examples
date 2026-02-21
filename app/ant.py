@@ -101,19 +101,21 @@ class Metrics:
             self.is_running = False
             self._cleanup_devices()
 
-            try:
-                if self.node:
+            if self.node:
+                try:                
                     self.logger.debug("Stopping ANT+ node")
                     self.node.stop()
-            except Exception:
-                self.logger.warning("Error stopping ANT+ node", exc_info=True)
+                except Exception:
+                    self.logger.warning("Error stopping ANT+ node", exc_info=True)
 
-            if self.node_thread:
-                self.node_thread.join(timeout=5)
 
+              # Wait for thread but don’t block forever
+            if self.node_thread and self.node_thread.is_alive():
+                self.node_thread.join(timeout=1)  # short timeout
+            
             self._reset_metrics()
 
-    def get_metrics(self, round_values=True) -> MetricsModel:
+    def get_metrics(self, round_values=False) -> MetricsModel:
         metrics = {
             "power": self.power,
             "speed": self.speed,

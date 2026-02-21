@@ -44,7 +44,7 @@ cli:
 
 run-backend:
 	@echo "Running FastAPI app on http://127.0.0.1:8000"
-	uv run uvicorn app.api:app --reload
+	uv run uvicorn app.api:app --reload --timeout-graceful-shutdown 1
 
 # -----------------------
 # Frontend commands

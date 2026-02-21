@@ -102,8 +102,8 @@
           <MetricRow
             v-for="(value, key) in metrics"
             :key="key"
-            :label="key === 'heart_rate_percent' ? 'HR %' : key === 'is_running' ? 'Running' : key.charAt(0).toUpperCase() + key.slice(1)"
-            :value="key === 'is_running' ? (value ? 'Yes' : 'No') : key === 'heart_rate_percent' ? formattedPercent : value ?? '—'"
+            :label="key"
+            :value="value"
           />
         </tbody>
       </table>
@@ -158,7 +158,7 @@ export default {
   data() {
     return {
       API,
-      metrics: { power: "—", speed: "—", cadence: "—", distance: "—", heart_rate: "—", heart_rate_percent: "—", zone: "Unknown", is_running: false },
+      metrics: { power: null, speed: null, cadence: null, distance: null, heart_rate: null, heart_rate_percent: null, zone: null, time: null, is_running: null },
       metricsLastUpdated: null,
       metricsConnected: true,
       devices: [],
@@ -173,13 +173,7 @@ export default {
     };
   },
 
-  computed: {
-    formattedPercent() {
-      return this.metrics.heart_rate_percent != null && this.metrics.heart_rate_percent !== "—"
-        ? this.metrics.heart_rate_percent.toFixed(1) + " %"
-        : "—";
-    }
-  },
+
 
   methods: {
     showToast(message, type = "success", action = "") {

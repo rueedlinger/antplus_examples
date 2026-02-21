@@ -4,15 +4,28 @@
       {{ label }}
     </td>
     <td class="border border-gray-300 px-4 py-2">
-      {{ value ?? "—" }}
+      {{ formattedValue }}
     </td>
   </tr>
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   label: String,
   value: [String, Number, Boolean],
   inactive: Boolean
+})
+
+// Computed property for formatted value
+const formattedValue = computed(() => {
+  if (props.value === null || props.value === undefined) return "—"
+
+  if (typeof props.value === 'boolean') return props.value ? 'Yes' : 'No'
+
+  if (typeof props.value === 'number') return props.value.toLocaleString()
+
+  return props.value
 })
 </script>

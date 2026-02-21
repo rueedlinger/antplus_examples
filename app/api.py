@@ -15,9 +15,13 @@ from app.model import MetricsModel, MetricsSettingsModel, SensorModel
 logging.basicConfig(level=logging.INFO)
 
 
+shutdown_event = asyncio.Event()  # shared shutdown flag
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- startup ----
+    logging.info("Starting ANT+ Metrics Service...") 
     app.state.metrics = Metrics(
         metrics_settings=MetricsSettingsModel(
             age=45,
@@ -25,13 +29,16 @@ async def lifespan(app: FastAPI):
             distance_wheel_circumference_m=0.141,
         )
     )
-    yield
+    
+    yield    
+    
     # ---- shutdown ----
-    if app.state.metrics:
-        # app.state.metrics.stop()
-        pass
-
-
+    logging.info("Shutting down ANT+ Metrics Service...")
+    shutdown_event.set()  # signal shutdown to generators        
+    if app.state.metrics:        
+        await asyncio.to_thread(app.state.metrics.stop)        
+       
+        
 app = FastAPI(title="ANT+ Metrics Service", lifespan=lifespan)
 
 app.add_middleware(
@@ -61,6 +68,7 @@ def start_metrics():
     raise HTTPException(
         status_code=500, detail=f"Failed to start metrics after {max_retries} attempts"
     )
+
 
 
 @app.post("/metrics/stop")
@@ -108,11 +116,13 @@ def get_metrics_devices():
         raise HTTPException(status_code=500, detail=f"Failed to get devices: {str(e)}")
 
 
+
 async def metrics_event_generator():
-    while True:
+    while not shutdown_event.is_set():       
         try:
             # Get current metrics from your app state
-            metrics = app.state.metrics.get_metrics()
+            #metrics = app.state.metrics.get_metrics()
+            metrics = await asyncio.to_thread(app.state.metrics.get_metrics)
 
             # Convert to JSON string
             data = json.dumps(metrics.dict())
@@ -123,12 +133,13 @@ async def metrics_event_generator():
             # Send updates every second (adjust as needed)
             await asyncio.sleep(1)
         except asyncio.CancelledError:
-            # Client disconnected
+            # Client disconnected           
             break
         except Exception as e:
             # Send error to client
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             await asyncio.sleep(1)
+
 
 
 @app.get("/metrics/stream")
@@ -137,17 +148,17 @@ async def stream_metrics():
 
 
 async def device_event_generator():
-
-    while True:
+    while not shutdown_event.is_set():
         try:
             # Get current devices from app state
-            devices = app.state.metrics.get_devices()  # returns list of dicts
+            #devices = app.state.metrics.get_devices()  # returns list of dicts
+            devices = await asyncio.to_thread(app.state.metrics.get_devices)            
             yield f"data: {json.dumps(devices)}\n\n"
             await asyncio.sleep(1)  # adjust frequency as needed
         except asyncio.CancelledError:
             # client disconnected
             break
-        except Exception as e:
+        except Exception as e:           
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             await asyncio.sleep(1)
 
