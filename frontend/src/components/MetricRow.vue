@@ -24,7 +24,7 @@ const formattedValue = computed(() => {
 
   if (typeof props.value === 'boolean') return props.value ? 'Yes' : 'No'
 
-  if (typeof props.value === 'number') return props.value.toLocaleString()
+  if (typeof props.value === 'number') return props.value.toLocaleString(undefined, { maximumFractionDigits: 2 })
 
   return props.value
 })
