@@ -3,10 +3,8 @@ import time
 import json
 import logging
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ant import Metrics
@@ -20,9 +18,13 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- startup ----
-    app.state.metrics = Metrics(metrics_settings=MetricsSettingsModel(
-        age=45, speed_wheel_circumference_m=0.141, distance_wheel_circumference_m=0.141
-    ))
+    app.state.metrics = Metrics(
+        metrics_settings=MetricsSettingsModel(
+            age=45,
+            speed_wheel_circumference_m=0.141,
+            distance_wheel_circumference_m=0.141,
+        )
+    )
     yield
     # ---- shutdown ----
     if app.state.metrics:
@@ -31,10 +33,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ANT+ Metrics Service", lifespan=lifespan)
-templates = Jinja2Templates(directory="templates")
-
-# Mount the "static" directory so that /static/... URLs serve files from ./static/
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -139,11 +137,11 @@ async def stream_metrics():
 
 
 async def device_event_generator():
-    
+
     while True:
-        try:            
+        try:
             # Get current devices from app state
-            devices = app.state.metrics.get_devices()  # returns list of dicts    
+            devices = app.state.metrics.get_devices()  # returns list of dicts
             yield f"data: {json.dumps(devices)}\n\n"
             await asyncio.sleep(1)  # adjust frequency as needed
         except asyncio.CancelledError:
@@ -157,8 +155,3 @@ async def device_event_generator():
 @app.get("/metrics/devices/stream")
 async def stream_devices():
     return StreamingResponse(device_event_generator(), media_type="text/event-stream")
-
-
-@app.get("/")
-def dashboard():
-    return FileResponse("static/dashboard.html")

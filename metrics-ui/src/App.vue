@@ -1,30 +1,296 @@
-<script setup>
-import HelloWorld from './components/HelloWorld.vue'
-</script>
-
 <template>
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
+  <div class="bg-gray-100 min-h-screen p-4 max-w-5xl mx-auto space-y-6">
+
+    <!-- Floating Toasts -->
+    <div class="fixed top-4 right-4 space-y-2 z-50">
+      <Alert
+        v-for="(toast, index) in toasts"
+        :key="index"
+        :type="toast.type"
+        :title="toast.title"
+        :message="toast.message"
+        @close="removeToast(index)"
+      />
+    </div>
+
+    <!-- Control Card -->
+    <div class="bg-white rounded-xl shadow-md p-6 text-center space-y-4">
+      <h2 class="text-xl font-semibold">Control Metrics</h2>
+      <div class="flex justify-center space-x-4">
+        <button
+          @click="startMetrics"
+          :disabled="loading.start"
+          class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+        >
+          <svg v-if="loading.start" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+               viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4l-3 3 3 3H4z"></path>
+          </svg>
+          <span>Start</span>
+        </button>
+
+        <button
+          @click="stopMetrics"
+          :disabled="loading.stop"
+          class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+        >
+          <svg v-if="loading.stop" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+               viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4l-3 3 3 3H4z"></path>
+          </svg>
+          <span>Stop</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Settings Card -->
+    <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
+      <h2 class="text-xl font-semibold text-center">Settings</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-sm font-medium">Speed Wheel Circumference (m)</label>
+          <input type="number" step="0.001" min="0" v-model.number="settings.speed_wheel_circumference_m"
+            class="border rounded px-2 py-1 w-full" />
+        </div>
+        <div>
+          <label class="text-sm font-medium">Distance Wheel Circumference (m)</label>
+          <input type="number" step="0.001" min="0" v-model.number="settings.distance_wheel_circumference_m"
+            class="border rounded px-2 py-1 w-full" />
+        </div>
+        <div>
+          <label class="text-sm font-medium">Age</label>
+          <input type="number" min="1" v-model.number="settings.age" class="border rounded px-2 py-1 w-full" />
+        </div>
+      </div>
+      <div class="text-center">
+        <button @click="updateSettings" :disabled="loading.updateSettings"
+          class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center space-x-2">
+          <svg v-if="loading.updateSettings" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+               viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4l-3 3 3 3H4z"></path>
+          </svg>
+          <span>Update Settings</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Metrics Table -->
+    <div class="bg-white rounded-xl shadow-md p-6">
+      <h1 class="text-2xl font-bold mb-2 text-center">Live Metrics</h1>
+
+      <div v-if="!metricsConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
+        Metrics connection lost. Reconnecting…
+      </div>
+
+      <div class="text-sm text-gray-500 mb-2 text-right">
+        Last updated: {{ metricsLastUpdated ? metricsLastUpdated.toLocaleTimeString() : '—' }}
+      </div>
+
+      <table class="table-auto w-full text-sm border-collapse border border-gray-300">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="border border-gray-300 px-4 py-2">Metric</th>
+            <th class="border border-gray-300 px-4 py-2">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <MetricRow
+            v-for="(value, key) in metrics"
+            :key="key"
+            :label="key === 'heart_rate_percent' ? 'HR %' : key === 'is_running' ? 'Running' : key.charAt(0).toUpperCase() + key.slice(1)"
+            :value="key === 'is_running' ? (value ? 'Yes' : 'No') : key === 'heart_rate_percent' ? formattedPercent : value ?? '—'"
+          />
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Devices Table -->
+    <div class="bg-white rounded-xl shadow-md p-6">
+      <h2 class="text-xl font-semibold mb-2 text-center">Connected Devices</h2>
+
+      <div v-if="!devicesConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
+        Devices connection lost. Reconnecting…
+      </div>
+
+      <div class="text-sm text-gray-500 mb-2 text-right">
+        Last updated: {{ devicesLastUpdated ? devicesLastUpdated.toLocaleTimeString() : '—' }}
+      </div>
+
+      <ul class="divide-y divide-gray-200">
+        <li v-for="device in devices" :key="device.device_id" class="py-2 flex justify-between text-sm">
+          <span class="font-medium">{{ device.name }}</span>
+          <span>ID: {{ device.device_id }} | Type: {{ device.device_type }}</span>
+        </li>
+      </ul>
+    </div>
+
   </div>
-  <HelloWorld msg="Vite + Vue" />
 </template>
 
-<style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
-}
-</style>
+<script>
+import Alert from "./components/Alert.vue";
+import MetricRow from "./components/MetricRow.vue";
+import { API } from "./config.js"; // <-- central REST/SSE config
+
+export default {
+  name: "App",
+  components: { Alert, MetricRow },
+
+  data() {
+    return {
+      metrics: { power: "—", speed: "—", cadence: "—", distance: "—", heart_rate: "—", heart_rate_percent: "—", zone: "Unknown", is_running: false },
+      metricsLastUpdated: null,
+      metricsConnected: true,
+      devices: [],
+      devicesLastUpdated: null,
+      devicesConnected: true,
+      settings: { speed_wheel_circumference_m: null, distance_wheel_circumference_m: null, age: null },
+      lastValidSettings: {},
+      metricsSource: null,
+      devicesSource: null,
+      toasts: [],
+      loading: { start: false, stop: false, updateSettings: false }
+    };
+  },
+
+  computed: {
+    formattedPercent() {
+      return this.metrics.heart_rate_percent != null && this.metrics.heart_rate_percent !== "—"
+        ? this.metrics.heart_rate_percent.toFixed(1) + " %"
+        : "—";
+    }
+  },
+
+  methods: {
+    showToast(message, type = "success", action = "") {
+      const title = action ? `${action} - ${type === "success" ? "Success" : type === "error" ? "Error" : "Info"}` 
+                           : type === "success" ? "Success" : type === "error" ? "Error" : "Info";
+      this.toasts.push({ message, type, title });
+      setTimeout(() => this.toasts.shift(), 5000);
+    },
+
+    removeToast(index) { this.toasts.splice(index, 1); },
+
+    // --- REST API ---
+    async startMetrics() {
+      if (this.loading.start) return;
+      this.loading.start = true;
+      this.showToast("Starting metrics...", "info", "Start");
+      try {
+        const res = await fetch(API.baseUrl + API.endpoints.startMetrics, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || res.statusText);
+        this.showToast(data.message, "success", "Start");
+      } catch (err) {
+        this.showToast(err.message || "Network error", "error", "Start");
+      } finally { this.loading.start = false; }
+    },
+
+    async stopMetrics() {
+      if (this.loading.stop) return;
+      this.loading.stop = true;
+      this.showToast("Stopping metrics...", "info", "Stop");
+      try {
+        const res = await fetch(API.baseUrl + API.endpoints.stopMetrics, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || res.statusText);
+        this.showToast(data.message, "success", "Stop");
+      } catch (err) {
+        this.showToast(err.message || "Network error", "error", "Stop");
+      } finally { this.loading.stop = false; }
+    },
+
+    async updateSettings() {
+      if (this.loading.updateSettings) return;
+      this.loading.updateSettings = true;
+      this.showToast("Updating settings...", "info", "Update Settings");
+      try {
+        const res = await fetch(API.baseUrl + API.endpoints.updateSettings, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(this.settings)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          this.settings = { ...this.lastValidSettings };
+          throw new Error(data.message || "Error: " + res.statusText);
+        }
+        this.lastValidSettings = { ...this.settings };
+        this.showToast(data.message || "Settings updated", "success", "Update Settings");
+      } catch (err) {
+        this.settings = { ...this.lastValidSettings };
+        this.showToast(err.message || "Network error", "error", "Update Settings");
+      } finally { this.loading.updateSettings = false; }
+    },
+
+    loadSettings() {
+      fetch(API.baseUrl + API.endpoints.getSettings)
+        .then(res => res.json())
+        .then(data => { this.settings = data; this.lastValidSettings = { ...data }; })
+        .catch(err => console.warn("Failed to load settings:", err));
+    },
+
+    // --- SSE ---
+    connectMetricsStream() {
+      if (this.metricsSource) this.metricsSource.close();
+      const connect = () => {
+        this.metricsSource = new EventSource(API.baseUrl + API.endpoints.metricsStream);
+        this.metricsSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            for (let key in this.metrics) {
+              this.metrics[key] = key === "is_running" ? data[key] ?? false : data[key] ?? "—";
+            }
+            this.metricsLastUpdated = new Date();
+            this.metricsConnected = true;
+          } catch (err) {
+            console.warn("Failed to parse metrics SSE data:", err);
+          }
+        };
+        this.metricsSource.onerror = () => {
+          this.metricsConnected = false;
+          console.warn("Metrics SSE disconnected. Reconnecting in 2s...");
+          this.metricsSource.close();
+          setTimeout(connect, 2000);
+        };
+      };
+      connect();
+    },
+
+    connectDevicesStream() {
+      if (this.devicesSource) this.devicesSource.close();
+      const connect = () => {
+        this.devicesSource = new EventSource(API.baseUrl + API.endpoints.devicesStream);
+        this.devicesSource.onmessage = (event) => {
+          try {
+            this.devices = JSON.parse(event.data);
+            this.devicesLastUpdated = new Date();
+            this.devicesConnected = true;
+          } catch (err) {
+            console.warn("Failed to parse devices SSE data:", err);
+          }
+        };
+        this.devicesSource.onerror = () => {
+          this.devicesConnected = false;
+          console.warn("Devices SSE disconnected. Reconnecting in 2s...");
+          this.devicesSource.close();
+          setTimeout(connect, 2000);
+        };
+      };
+      connect();
+    }
+  },
+
+  mounted() {
+    this.loadSettings();
+    this.connectMetricsStream();
+    this.connectDevicesStream();
+  }
+};
+</script>

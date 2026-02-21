@@ -123,13 +123,13 @@ class Metrics:
             "is_running": self.is_running,
             "heart_rate_percent": self.heart_rate_percent,
             "zone_name": self.zone_name,
-            "zone_value": self.zone_value
+            "zone_value": self.zone_value,
         }
         if round_values:
             for key in ["power", "speed", "cadence", "distance", "heart_rate"]:
                 if metrics[key] is not None:
                     metrics[key] = round(metrics[key], 2)
-        
+
         return MetricsModel(**metrics)
 
     def _reset_metrics(self):
