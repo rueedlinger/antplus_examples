@@ -32,6 +32,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ANT+ Metrics Service", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
+
+# Mount the "static" directory so that /static/... URLs serve files from ./static/
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
