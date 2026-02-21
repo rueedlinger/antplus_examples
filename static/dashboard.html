@@ -59,8 +59,7 @@
       <h1 class="text-2xl font-bold mb-2 text-center">Live Metrics</h1>
 
       <!-- Metrics disconnected banner -->
-      <div v-if="!metricsConnected"
-        class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
+      <div v-if="!metricsConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
         Metrics connection lost. Reconnecting…
       </div>
 
@@ -93,8 +92,7 @@
       <h2 class="text-xl font-semibold mb-2 text-center">Connected Devices</h2>
 
       <!-- Devices disconnected banner -->
-      <div v-if="!devicesConnected"
-        class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
+      <div v-if="!devicesConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
         Devices connection lost. Reconnecting…
       </div>
 
@@ -248,12 +246,16 @@
             this.metricsSource = new EventSource("/metrics/stream");
 
             this.metricsSource.onmessage = (event) => {
-              const data = JSON.parse(event.data);
-              for (let key in this.metrics) {
-                this.metrics[key] = key === 'is_running' ? data[key] ?? false : data[key] ?? '—';
+              try {
+                const data = JSON.parse(event.data);
+                for (let key in this.metrics) {
+                  this.metrics[key] = key === 'is_running' ? data[key] ?? false : data[key] ?? '—';
+                }
+                this.metricsLastUpdated = new Date();
+                this.metricsConnected = true;
+              } catch (err) {
+                console.warn("Failed to parse metrics SSE data:", err);
               }
-              this.metricsLastUpdated = new Date();
-              this.metricsConnected = true;
             };
 
             this.metricsSource.onerror = () => {
@@ -274,9 +276,13 @@
             this.devicesSource = new EventSource("/metrics/devices/stream");
 
             this.devicesSource.onmessage = (event) => {
-              this.devices = JSON.parse(event.data);
-              this.devicesLastUpdated = new Date();
-              this.devicesConnected = true;
+              try {
+                this.devices = JSON.parse(event.data);
+                this.devicesLastUpdated = new Date();
+                this.devicesConnected = true;
+              } catch (err) {
+                console.warn("Failed to parse devices SSE data:", err);
+              }
             };
 
             this.devicesSource.onerror = () => {
