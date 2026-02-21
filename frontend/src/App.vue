@@ -12,7 +12,7 @@
         @close="removeToast(index)"
       />
     </div>
-    
+
     <!-- Control Card -->
     <ControlCard
       :loading="loading"
@@ -109,7 +109,7 @@ export default {
   methods: {
     showToast(message, title, type = ToastType.SUCCESS) {      
       this.toasts.push({ message, title, type });
-      setTimeout(() => this.toasts.shift(), 2000);
+      setTimeout(() => this.toasts.shift(), 3000);
     },
 
     removeToast(index) {
@@ -147,20 +147,37 @@ export default {
     async updateSettings(newSettings) {
       if (this.loading.updateSettings) return;
       this.loading.updateSettings = true;
-      // this.showToast("Updating settings...", "info", "Update Settings");
+
+      // Normalize empty values to null
+      const normalizedSettings = {};
+      Object.keys(newSettings).forEach((key) => {
+        normalizedSettings[key] =
+          newSettings[key] === "" || newSettings[key] === undefined
+            ? null
+            : newSettings[key];
+      });
+
       try {
         const { data } = await axios.post(
           API.baseUrl + API.endpoints.updateSettings,
-          newSettings
+          normalizedSettings
         );
         // Replace parent settings reactively
-        this.settings = { ...newSettings };
-        this.lastValidSettings = { ...newSettings };
-        this.showToast(data.message || "Settings updated", "Settings Updated", ToastType.SUCCESS);
+        this.settings = { ...normalizedSettings };
+        this.lastValidSettings = { ...normalizedSettings };
+        this.showToast(
+          data.message || "Settings updated",
+          "Settings Updated",
+          ToastType.SUCCESS
+        );
       } catch (err) {
         // Revert to last valid settings
         this.settings = { ...this.lastValidSettings };
-        this.showToast(err.response?.data?.message || err.message || "Network error", "Error Updating Settings", ToastType.ERROR);
+        this.showToast(
+          err.response?.data?.message || err.message || "Network error",
+          "Error Updating Settings",
+          ToastType.ERROR
+        );
       } finally {
         this.loading.updateSettings = false;
       }
