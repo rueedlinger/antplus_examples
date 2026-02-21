@@ -16,15 +16,15 @@
     <!-- Floating Toasts -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50">
       <alert v-for="(toast, index) in toasts" :key="index" :type="toast.type"
-        :title="toast.type === 'success' ? 'Success' : 'Error'" :message="toast.message" @close="removeToast(index)" />
+        :title="toast.type === 'success' ? 'Success' : 'Error'" :message="toast.message"
+        @close="removeToast(index)" />
     </div>
 
     <!-- Control Card -->
     <div class="bg-white rounded-xl shadow-md p-6 text-center space-y-4">
       <h2 class="text-xl font-semibold">Control Metrics</h2>
       <div class="flex justify-center space-x-4">
-        <button @click="startMetrics"
-          class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Start</button>
+        <button @click="startMetrics" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Start</button>
         <button @click="stopMetrics" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Stop</button>
       </div>
     </div>
@@ -56,7 +56,19 @@
 
     <!-- Live Metrics Table -->
     <div class="bg-white rounded-xl shadow-md p-6">
-      <h1 class="text-2xl font-bold mb-4 text-center">Live Metrics</h1>
+      <h1 class="text-2xl font-bold mb-2 text-center">Live Metrics</h1>
+
+      <!-- Metrics disconnected banner -->
+      <div v-if="!metricsConnected"
+        class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
+        Metrics connection lost. Reconnecting…
+      </div>
+
+      <!-- Last update -->
+      <div class="text-sm text-gray-500 mb-2 text-right">
+        Last updated: [[ metricsLastUpdated ? metricsLastUpdated.toLocaleTimeString() : '—' ]]
+      </div>
+
       <table class="table-auto w-full text-sm border-collapse border border-gray-300">
         <thead>
           <tr class="bg-gray-200">
@@ -67,18 +79,30 @@
         <tbody>
           <template v-for="(value, key) in metrics" :key="key">
             <metric-row :label="key === 'heart_rate_percent' ? 'HR %' 
-                     : key === 'is_running' ? 'Running' 
-                     : key.charAt(0).toUpperCase() + key.slice(1)" :value="key === 'is_running' ? (value ? 'Yes' : 'No') 
-                     : key === 'heart_rate_percent' ? formattedPercent 
-                     : value ?? '—'" />
+                      : key === 'is_running' ? 'Running' 
+                      : key.charAt(0).toUpperCase() + key.slice(1)" :value="key === 'is_running' ? (value ? 'Yes' : 'No') 
+                      : key === 'heart_rate_percent' ? formattedPercent 
+                      : value ?? '—'" />
           </template>
         </tbody>
       </table>
     </div>
 
-    <!-- Devices -->
+    <!-- Devices Table -->
     <div class="bg-white rounded-xl shadow-md p-6">
-      <h2 class="text-xl font-semibold mb-4 text-center">Connected Devices</h2>
+      <h2 class="text-xl font-semibold mb-2 text-center">Connected Devices</h2>
+
+      <!-- Devices disconnected banner -->
+      <div v-if="!devicesConnected"
+        class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
+        Devices connection lost. Reconnecting…
+      </div>
+
+      <!-- Last update -->
+      <div class="text-sm text-gray-500 mb-2 text-right">
+        Last updated: [[ devicesLastUpdated ? devicesLastUpdated.toLocaleTimeString() : '—' ]]
+      </div>
+
       <ul class="divide-y divide-gray-200">
         <li v-for="device in devices" :key="device.device_id" class="py-2 flex justify-between text-sm">
           <span class="font-medium">[[ device.name ]]</span>
@@ -100,11 +124,11 @@
           delimiters: ['[[', ']]'],
           props: ['label', 'value', 'inactive'],
           template: `
-        <tr :class="inactive ? 'bg-gray-100 text-gray-400' : ''">
-          <td class="border border-gray-300 px-4 py-2 font-medium">[[ label ]]</td>
-          <td class="border border-gray-300 px-4 py-2">[[ value ?? '—' ]]</td>
-        </tr>
-      `
+          <tr :class="inactive ? 'bg-gray-100 text-gray-400' : ''">
+            <td class="border border-gray-300 px-4 py-2 font-medium">[[ label ]]</td>
+            <td class="border border-gray-300 px-4 py-2">[[ value ?? '—' ]]</td>
+          </tr>
+        `
         },
 
         'alert': {
@@ -112,16 +136,16 @@
           emits: ['close'],
           delimiters: ['[[', ']]'],
           template: `
-        <div role="alert" class="rounded-md shadow-lg overflow-hidden w-80">
-          <div :class="headerClass" class="font-bold px-4 py-2 flex justify-between items-center">
-            <span>[[ title ]]</span>
-            <button @click="$emit('close')" class="font-bold ml-4">&times;</button>
+          <div role="alert" class="rounded-md shadow-lg overflow-hidden w-80">
+            <div :class="headerClass" class="font-bold px-4 py-2 flex justify-between items-center">
+              <span>[[ title ]]</span>
+              <button @click="$emit('close')" class="font-bold ml-4">&times;</button>
+            </div>
+            <div :class="bodyClass" class="px-4 py-3">
+              <p>[[ message ]]</p>
+            </div>
           </div>
-          <div :class="bodyClass" class="px-4 py-3">
-            <p>[[ message ]]</p>
-          </div>
-        </div>
-      `,
+        `,
           computed: {
             headerClass() {
               return this.type === 'success' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white';
@@ -137,17 +161,12 @@
 
       data() {
         return {
-          metrics: {
-            power: '—',
-            speed: '—',
-            cadence: '—',
-            distance: '—',
-            heart_rate: '—',
-            heart_rate_percent: '—',
-            zone: 'Unknown',
-            is_running: false
-          },
+          metrics: { power: '—', speed: '—', cadence: '—', distance: '—', heart_rate: '—', heart_rate_percent: '—', zone: 'Unknown', is_running: false },
+          metricsLastUpdated: null,
+          metricsConnected: true,
           devices: [],
+          devicesLastUpdated: null,
+          devicesConnected: true,
           settings: { speed_wheel_circumference_m: null, distance_wheel_circumference_m: null, age: null },
           lastValidSettings: {},
           metricsSource: null,
@@ -215,6 +234,13 @@
           }
         },
 
+        loadSettings() {
+          fetch("/metrics/settings")
+            .then(res => res.json())
+            .then(data => { this.settings = data; this.lastValidSettings = { ...data }; })
+            .catch(err => console.warn("Failed to load settings:", err));
+        },
+
         connectMetricsStream() {
           if (this.metricsSource) this.metricsSource.close();
 
@@ -223,22 +249,17 @@
 
             this.metricsSource.onmessage = (event) => {
               const data = JSON.parse(event.data);
-
-              // Update metrics
               for (let key in this.metrics) {
-                if (key === 'is_running') this.metrics[key] = data[key] ?? false;
-                else this.metrics[key] = data[key] !== null ? data[key] : '—';
+                this.metrics[key] = key === 'is_running' ? data[key] ?? false : data[key] ?? '—';
               }
-
-              // Update timestamp
-              this.lastUpdated = new Date();
+              this.metricsLastUpdated = new Date();
+              this.metricsConnected = true;
             };
 
-            this.metricsSource.onerror = (err) => {
-              console.warn("Metrics SSE error, reconnecting...", err);
+            this.metricsSource.onerror = () => {
+              this.metricsConnected = false;
+              console.warn("Metrics SSE disconnected. Reconnecting in 2s...");
               this.metricsSource.close();
-
-              // Retry after 2 seconds
               setTimeout(connect, 2000);
             };
           };
@@ -254,30 +275,19 @@
 
             this.devicesSource.onmessage = (event) => {
               this.devices = JSON.parse(event.data);
-
-              // Update timestamp
               this.devicesLastUpdated = new Date();
+              this.devicesConnected = true;
             };
 
-            this.devicesSource.onerror = (err) => {
-              console.warn("Devices SSE error, reconnecting...", err);
+            this.devicesSource.onerror = () => {
+              this.devicesConnected = false;
+              console.warn("Devices SSE disconnected. Reconnecting in 2s...");
               this.devicesSource.close();
               setTimeout(connect, 2000);
             };
           };
 
           connect();
-        },
-
-        async loadSettings() {
-          try {
-            const res = await fetch("/metrics/settings");
-            if (!res.ok) throw new Error(res.statusText);
-            this.settings = await res.json();
-            this.lastValidSettings = { ...this.settings };
-          } catch (err) {
-            console.warn("Failed to load settings:", err);
-          }
         }
       },
 
