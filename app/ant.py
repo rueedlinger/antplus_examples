@@ -102,17 +102,16 @@ class Metrics:
             self._cleanup_devices()
 
             if self.node:
-                try:                
+                try:
                     self.logger.debug("Stopping ANT+ node")
                     self.node.stop()
                 except Exception:
                     self.logger.warning("Error stopping ANT+ node", exc_info=True)
 
-
-              # Wait for thread but don’t block forever
+            # Wait for thread but don’t block forever
             if self.node_thread and self.node_thread.is_alive():
                 self.node_thread.join(timeout=1)  # short timeout
-            
+
             self._reset_metrics()
 
     def get_metrics(self, round_values=False) -> MetricsModel:
@@ -126,6 +125,7 @@ class Metrics:
             "heart_rate_percent": self.heart_rate_percent,
             "zone_name": self.zone_name,
             "zone_value": self.zone_value,
+            # "time": round(time.time() - self.time) if self.time else None,
         }
         if round_values:
             for key in ["power", "speed", "cadence", "distance", "heart_rate"]:
