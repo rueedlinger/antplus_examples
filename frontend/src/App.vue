@@ -147,7 +147,7 @@ export default {
     async startMetrics() {
       if (this.loading.start) return;
       this.loading.start = true;
-      this.showToast("Starting metrics...", "info", "Start");
+      //this.showToast("Starting metrics...", "info", "Start");
       try {
         const { data } = await axios.post(API.baseUrl + API.endpoints.startMetrics);
         this.showToast(data.message || "Metrics started", "success", "Start");
@@ -161,7 +161,7 @@ export default {
     async stopMetrics() {
       if (this.loading.stop) return;
       this.loading.stop = true;
-      this.showToast("Stopping metrics...", "info", "Stop");
+      //this.showToast("Stopping metrics...", "info", "Stop");
       try {
         const { data } = await axios.post(API.baseUrl + API.endpoints.stopMetrics);
         this.showToast(data.message || "Metrics stopped", "success", "Stop");
@@ -175,7 +175,7 @@ export default {
     async updateSettings(newSettings) {
       if (this.loading.updateSettings) return;
       this.loading.updateSettings = true;
-      this.showToast("Updating settings...", "info", "Update Settings");
+      // this.showToast("Updating settings...", "info", "Update Settings");
       try {
         const { data } = await axios.post(
           API.baseUrl + API.endpoints.updateSettings,
