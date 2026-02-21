@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
         metrics_settings=MetricsSettingsModel(
             age=45,
             speed_wheel_circumference_m=0.141,
-            distance_wheel_circumference_m=0.141,
+            distance_wheel_circumference_m=0.1205,
         )
     )
 

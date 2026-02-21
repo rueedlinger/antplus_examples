@@ -92,6 +92,7 @@ import MetricRow from "./components/MetricRow.vue";
 import SettingsCard from "./components/SettingsCard.vue";
 import { API } from "./config.js";
 import axios from "axios";
+import { ToastType } from "./constants/toastType.js";
 
 
 export default {
@@ -131,11 +132,8 @@ export default {
   },
 
   methods: {
-    showToast(message, type = "success", action = "") {
-      const title = action
-        ? `${action} - ${type === "success" ? "Success" : type === "error" ? "Error" : "Info"}`
-        : type === "success" ? "Success" : type === "error" ? "Error" : "Info";
-      this.toasts.push({ message, type, title });
+    showToast(message, title, type = ToastType.SUCCESS) {      
+      this.toasts.push({ message, title, type });
       setTimeout(() => this.toasts.shift(), 2000);
     },
 
@@ -147,12 +145,11 @@ export default {
     async startMetrics() {
       if (this.loading.start) return;
       this.loading.start = true;
-      //this.showToast("Starting metrics...", "info", "Start");
       try {
         const { data } = await axios.post(API.baseUrl + API.endpoints.startMetrics);
-        this.showToast(data.message || "Metrics started", "success", "Start");
+        this.showToast(data.message || "Metrics started", "Metrics Started", ToastType.SUCCESS);
       } catch (err) {
-        this.showToast(err.response?.data?.message || err.message || "Network error", "error", "Start");
+        this.showToast(err.response?.data?.message || err.message || "Network error", "Error Starting Metrics", ToastType.ERROR);
       } finally {
         this.loading.start = false;
       }
@@ -164,9 +161,9 @@ export default {
       //this.showToast("Stopping metrics...", "info", "Stop");
       try {
         const { data } = await axios.post(API.baseUrl + API.endpoints.stopMetrics);
-        this.showToast(data.message || "Metrics stopped", "success", "Stop");
+        this.showToast(data.message || "Metrics stopped", "Metrics Stopped", ToastType.SUCCESS);
       } catch (err) {
-        this.showToast(err.response?.data?.message || err.message || "Network error", "error", "Stop");
+        this.showToast(err.response?.data?.message || err.message || "Network error", "Error Stopping Metrics", ToastType.ERROR);
       } finally {
         this.loading.stop = false;
       }
@@ -184,11 +181,11 @@ export default {
         // Replace parent settings reactively
         this.settings = { ...newSettings };
         this.lastValidSettings = { ...newSettings };
-        this.showToast(data.message || "Settings updated", "success", "Update Settings");
+        this.showToast(data.message || "Settings updated", "Settings Updated", ToastType.SUCCESS);
       } catch (err) {
         // Revert to last valid settings
         this.settings = { ...this.lastValidSettings };
-        this.showToast(err.response?.data?.message || err.message || "Network error", "error", "Update Settings");
+        this.showToast(err.response?.data?.message || err.message || "Network error", "Error Updating Settings", ToastType.ERROR);
       } finally {
         this.loading.updateSettings = false;
       }
