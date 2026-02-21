@@ -16,8 +16,7 @@
     <!-- Floating Toasts -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50">
       <alert v-for="(toast, index) in toasts" :key="index" :type="toast.type"
-        :title="toast.type === 'success' ? 'Success' : toast.type === 'error' ? 'Error' : 'Info'" :message="toast.message"
-        @close="removeToast(index)" />
+        :title="toast.title" :message="toast.message" @close="removeToast(index)" />
     </div>
 
     <!-- Control Card -->
@@ -220,10 +219,14 @@
       },
 
       methods: {
-        showToast(message, type = "success") {
-          this.toasts.push({ message, type });
+        // Show toast with action in title
+        showToast(message, type = "success", action = "") {
+          const title = action ? `${action} - ${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info'}` 
+                               : type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info';
+          this.toasts.push({ message, type, title });
           setTimeout(() => this.toasts.shift(), 5000);
         },
+
         removeToast(index) {
           this.toasts.splice(index, 1);
         },
@@ -231,14 +234,14 @@
         async startMetrics() {
           if (this.loading.start) return;
           this.loading.start = true;
-          this.showToast("Starting metrics...", "info");
+          this.showToast("Starting metrics...", "info", "Start");
           try {
             const res = await fetch("/metrics/start", { method: "POST" });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || res.statusText);
-            this.showToast(data.message, "success");
+            this.showToast(data.message, "success", "Start");
           } catch (err) {
-            this.showToast(err.message || "Network error", "error");
+            this.showToast(err.message || "Network error", "error", "Start");
           } finally {
             this.loading.start = false;
           }
@@ -247,14 +250,14 @@
         async stopMetrics() {
           if (this.loading.stop) return;
           this.loading.stop = true;
-          this.showToast("Stopping metrics...", "info");
+          this.showToast("Stopping metrics...", "info", "Stop");
           try {
             const res = await fetch("/metrics/stop", { method: "POST" });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || res.statusText);
-            this.showToast(data.message, "success");
+            this.showToast(data.message, "success", "Stop");
           } catch (err) {
-            this.showToast(err.message || "Network error", "error");
+            this.showToast(err.message || "Network error", "error", "Stop");
           } finally {
             this.loading.stop = false;
           }
@@ -263,7 +266,7 @@
         async updateSettings() {
           if (this.loading.updateSettings) return;
           this.loading.updateSettings = true;
-          this.showToast("Updating settings...", "info");
+          this.showToast("Updating settings...", "info", "Update Settings");
           try {
             const res = await fetch("/metrics/settings", {
               method: "POST",
@@ -276,10 +279,10 @@
               throw new Error(data.message || "Error: " + res.statusText);
             }
             this.lastValidSettings = { ...this.settings };
-            this.showToast(data.message || "Settings updated", "success");
+            this.showToast(data.message || "Settings updated", "success", "Update Settings");
           } catch (err) {
             this.settings = { ...this.lastValidSettings };
-            this.showToast(err.message || "Network error", "error");
+            this.showToast(err.message || "Network error", "error", "Update Settings");
           } finally {
             this.loading.updateSettings = false;
           }
