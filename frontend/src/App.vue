@@ -53,7 +53,7 @@
         <div>
           <label class="text-sm font-medium">Speed Wheel Circumference (m)</label>
           <input type="number" step="0.001" min="0" v-model.number="settings.speed_wheel_circumference_m"
-            class="border rounded px-2 py-1 w-full" />
+            class="border rounded px-2 py-1 w-full" />          
         </div>
         <div>
           <label class="text-sm font-medium">Distance Wheel Circumference (m)</label>
@@ -149,7 +149,8 @@
 <script>
 import Alert from "./components/Alert.vue";
 import MetricRow from "./components/MetricRow.vue";
-import { API } from "./config.js"; // <-- central REST/SSE config
+import { API } from "./config.js";
+import axios from "axios";
 
 export default {
   name: "App",
@@ -158,13 +159,27 @@ export default {
   data() {
     return {
       API,
-      metrics: { power: null, speed: null, cadence: null, distance: null, heart_rate: null, heart_rate_percent: null, zone: null, time: null, is_running: null },
+      metrics: {
+        power: null,
+        speed: null,
+        cadence: null,
+        distance: null,
+        heart_rate: null,
+        heart_rate_percent: null,
+        zone: null,
+        time: null,
+        is_running: null
+      },
       metricsLastUpdated: null,
       metricsConnected: true,
       devices: [],
       devicesLastUpdated: null,
       devicesConnected: true,
-      settings: { speed_wheel_circumference_m: null, distance_wheel_circumference_m: null, age: null },
+      settings: {
+        speed_wheel_circumference_m: null,
+        distance_wheel_circumference_m: null,
+        age: null
+      },
       lastValidSettings: {},
       metricsSource: null,
       devicesSource: null,
@@ -173,17 +188,18 @@ export default {
     };
   },
 
-
-
   methods: {
     showToast(message, type = "success", action = "") {
-      const title = action ? `${action} - ${type === "success" ? "Success" : type === "error" ? "Error" : "Info"}` 
-                           : type === "success" ? "Success" : type === "error" ? "Error" : "Info";
+      const title = action
+        ? `${action} - ${type === "success" ? "Success" : type === "error" ? "Error" : "Info"}`
+        : type === "success" ? "Success" : type === "error" ? "Error" : "Info";
       this.toasts.push({ message, type, title });
       setTimeout(() => this.toasts.shift(), 2000);
     },
 
-    removeToast(index) { this.toasts.splice(index, 1); },
+    removeToast(index) {
+      this.toasts.splice(index, 1);
+    },
 
     // --- REST API ---
     async startMetrics() {
@@ -191,13 +207,13 @@ export default {
       this.loading.start = true;
       this.showToast("Starting metrics...", "info", "Start");
       try {
-        const res = await fetch(API.baseUrl + API.endpoints.startMetrics, { method: "POST" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || res.statusText);
-        this.showToast(data.message, "success", "Start");
+        const { data } = await axios.post(API.baseUrl + API.endpoints.startMetrics);
+        this.showToast(data.message || "Metrics started", "success", "Start");
       } catch (err) {
-        this.showToast(err.message || "Network error", "error", "Start");
-      } finally { this.loading.start = false; }
+        this.showToast(err.response?.data?.message || err.message || "Network error", "error", "Start");
+      } finally {
+        this.loading.start = false;
+      }
     },
 
     async stopMetrics() {
@@ -205,13 +221,13 @@ export default {
       this.loading.stop = true;
       this.showToast("Stopping metrics...", "info", "Stop");
       try {
-        const res = await fetch(API.baseUrl + API.endpoints.stopMetrics, { method: "POST" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || res.statusText);
-        this.showToast(data.message, "success", "Stop");
+        const { data } = await axios.post(API.baseUrl + API.endpoints.stopMetrics);
+        this.showToast(data.message || "Metrics stopped", "success", "Stop");
       } catch (err) {
-        this.showToast(err.message || "Network error", "error", "Stop");
-      } finally { this.loading.stop = false; }
+        this.showToast(err.response?.data?.message || err.message || "Network error", "error", "Stop");
+      } finally {
+        this.loading.stop = false;
+      }
     },
 
     async updateSettings() {
@@ -219,78 +235,95 @@ export default {
       this.loading.updateSettings = true;
       this.showToast("Updating settings...", "info", "Update Settings");
       try {
-        const res = await fetch(API.baseUrl + API.endpoints.updateSettings, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(this.settings)
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          this.settings = { ...this.lastValidSettings };
-          throw new Error(data.message || "Error: " + res.statusText);
-        }
+        const { data } = await axios.post(API.baseUrl + API.endpoints.updateSettings, this.settings);
         this.lastValidSettings = { ...this.settings };
         this.showToast(data.message || "Settings updated", "success", "Update Settings");
       } catch (err) {
         this.settings = { ...this.lastValidSettings };
-        this.showToast(err.message || "Network error", "error", "Update Settings");
-      } finally { this.loading.updateSettings = false; }
+        this.showToast(err.response?.data?.message || err.message || "Network error", "error", "Update Settings");
+      } finally {
+        this.loading.updateSettings = false;
+      }
     },
 
-    loadSettings() {
-      fetch(API.baseUrl + API.endpoints.getSettings)
-        .then(res => res.json())
-        .then(data => { this.settings = data; this.lastValidSettings = { ...data }; })
-        .catch(err => console.warn("Failed to load settings:", err));
+    async loadSettings() {
+      try {
+        const { data } = await axios.get(API.baseUrl + API.endpoints.getSettings);
+        this.settings = data;
+        
+        this.lastValidSettings = { ...data };
+      } catch (err) {
+        console.warn("Failed to load settings:", err);
+      }
     },
 
     // --- SSE ---
     connectMetricsStream() {
-      if (this.metricsSource) this.metricsSource.close();
+      if (this.metricsSource) {
+        this.metricsSource.close();
+        this.metricsSource = null;
+      }
+
       const connect = () => {
         this.metricsSource = new EventSource(API.baseUrl + API.endpoints.metricsStream);
+
         this.metricsSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            for (let key in this.metrics) {
-              this.metrics[key] = key === "is_running" ? data[key] ?? false : data[key] ?? "—";
-            }
+            Object.keys(this.metrics).forEach((key) => {
+              this.metrics[key] = data[key];
+            });
             this.metricsLastUpdated = new Date();
             this.metricsConnected = true;
           } catch (err) {
-            console.warn("Failed to parse metrics SSE data:", err);
+            console.warn("Metrics SSE parse error:", err);
           }
         };
+
         this.metricsSource.onerror = () => {
           this.metricsConnected = false;
-          console.warn("Metrics SSE disconnected. Reconnecting in 2s...");
-          this.metricsSource.close();
+          console.warn("Metrics SSE disconnected. Retrying in 2s...");
+          if (this.metricsSource) {
+            this.metricsSource.close();
+            this.metricsSource = null;
+          }
           setTimeout(connect, 2000);
         };
       };
+
       connect();
     },
 
     connectDevicesStream() {
-      if (this.devicesSource) this.devicesSource.close();
+      if (this.devicesSource) {
+        this.devicesSource.close();
+        this.devicesSource = null;
+      }
+
       const connect = () => {
         this.devicesSource = new EventSource(API.baseUrl + API.endpoints.devicesStream);
+
         this.devicesSource.onmessage = (event) => {
           try {
             this.devices = JSON.parse(event.data);
             this.devicesLastUpdated = new Date();
             this.devicesConnected = true;
           } catch (err) {
-            console.warn("Failed to parse devices SSE data:", err);
+            console.warn("Devices SSE parse error:", err);
           }
         };
+
         this.devicesSource.onerror = () => {
           this.devicesConnected = false;
-          console.warn("Devices SSE disconnected. Reconnecting in 2s...");
-          this.devicesSource.close();
+          console.warn("Devices SSE disconnected. Retrying in 2s...");
+          if (this.devicesSource) {
+            this.devicesSource.close();
+            this.devicesSource = null;
+          }
           setTimeout(connect, 2000);
         };
       };
+
       connect();
     }
   },
