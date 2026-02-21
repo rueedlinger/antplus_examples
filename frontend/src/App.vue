@@ -166,7 +166,8 @@ export default {
         distance: null,
         heart_rate: null,
         heart_rate_percent: null,
-        zone: null,        
+        zone_name: null,        
+        zone_description: null,        
         is_running: null
       },
       metricsLastUpdated: null,

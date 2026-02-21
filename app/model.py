@@ -9,12 +9,12 @@ class SportZone(str, Enum):
     https://www.polar.com/en/guide/heart-rate-zones
     """
 
-    ZONE_UNKNOWN = "Unknown"
-    ZONE_1 = "Very Light"
-    ZONE_2 = "Light"
-    ZONE_3 = "Moderate"
-    ZONE_4 = "Hard"
-    ZONE_5 = "Maximum"
+    RESTING = "Resting Heart Rate"  # Heart rate at rest
+    ZONE_1 = "Very Light - Recovery"  # Gentle activity, easy breathing
+    ZONE_2 = "Light - Fat Burn"  # Comfortable pace, can carry a conversation
+    ZONE_3 = "Moderate - Cardio"  # Elevated heart rate, conversation limited
+    ZONE_4 = "Hard - Threshold"  # Challenging, conversation difficult
+    ZONE_5 = "Maximum - Peak"  # Max effort, near exhaustion
 
     @staticmethod
     def hrmax_from_age(age: int) -> float:
@@ -48,7 +48,7 @@ class SportZone(str, Enum):
         :param percent: Heart rate as percentage of HRmax (0–100)
         """
         if percent is None:
-            return SportZone.ZONE_UNKNOWN
+            return SportZone.RESTING
 
         if 50 <= percent < 60:
             return SportZone.ZONE_1
@@ -61,10 +61,10 @@ class SportZone(str, Enum):
         elif 90 <= percent <= 100:
             return SportZone.ZONE_5
         else:
-            return SportZone.ZONE_UNKNOWN
+            return SportZone.RESTING
 
     @staticmethod
-    def from_age_and_hr(age: int, heart_rate: float) -> SportZone:
+    def sport_zone(age: int, heart_rate: float) -> SportZone:
         """
         Convenience method: calculates percentage and returns zone.
         """
@@ -104,5 +104,5 @@ class MetricsModel(BaseModel):
     heart_rate: Optional[int] = None
     heart_rate_percent: Optional[float] = None
     zone_name: Optional[str] = None
-    zone_value: Optional[str] = None
+    zone_description: Optional[str] = None
     is_running: Optional[bool] = None

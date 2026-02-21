@@ -15,7 +15,7 @@ from openant.devices.scanner import Scanner
 
 from openant.devices.utilities import auto_create_device
 
-from app.model import MetricsModel, MetricsSettingsModel
+from app.model import MetricsModel, MetricsSettingsModel, SportZone
 
 
 class Metrics:
@@ -123,8 +123,8 @@ class Metrics:
             "heart_rate": self.heart_rate,
             "is_running": self.is_running,
             "heart_rate_percent": self.heart_rate_percent,
-            "zone_name": self.zone_name,
-            "zone_value": self.zone_value,
+            "zone_name": self.zone.name if self.zone else None,
+            "zone_description": self.zone.value if self.zone else None,
             # "time": round(time.time() - self.time) if self.time else None,
         }
         if round_values:
@@ -168,6 +168,12 @@ class Metrics:
 
             if isinstance(data, HeartRateData):
                 self.heart_rate = data.heart_rate
+                self.heart_rate_percent = SportZone.percent_from_age(
+                    self.metrics_settings.age, self.heart_rate
+                )
+                self.zone = SportZone.sport_zone(
+                    self.metrics_settings.age, self.heart_rate
+                )
 
             if isinstance(data, BikeSpeedData):
                 speed_wheel_circumference = (
