@@ -16,7 +16,7 @@
     <!-- Floating Toasts -->
     <div id="toast-container" class="fixed top-4 right-4 space-y-2 z-50">
       <alert v-for="(toast, index) in toasts" :key="index" :type="toast.type"
-        :title="toast.type === 'success' ? 'Success' : 'Error'" :message="toast.message"
+        :title="toast.type === 'success' ? 'Success' : toast.type === 'error' ? 'Error' : 'Info'" :message="toast.message"
         @close="removeToast(index)" />
     </div>
 
@@ -24,8 +24,35 @@
     <div class="bg-white rounded-xl shadow-md p-6 text-center space-y-4">
       <h2 class="text-xl font-semibold">Control Metrics</h2>
       <div class="flex justify-center space-x-4">
-        <button @click="startMetrics" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Start</button>
-        <button @click="stopMetrics" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Stop</button>
+        <!-- Start Button -->
+        <button
+          @click="startMetrics"
+          :disabled="loading.start"
+          class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+        >
+          <svg v-if="loading.start" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+               viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4l-3 3 3 3H4z"></path>
+          </svg>
+          <span>Start</span>
+        </button>
+
+        <!-- Stop Button -->
+        <button
+          @click="stopMetrics"
+          :disabled="loading.stop"
+          class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center justify-center space-x-2"
+        >
+          <svg v-if="loading.stop" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+               viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4l-3 3 3 3H4z"></path>
+          </svg>
+          <span>Stop</span>
+        </button>
       </div>
     </div>
 
@@ -49,8 +76,16 @@
         </div>
       </div>
       <div class="text-center">
-        <button @click="updateSettings" class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update
-          Settings</button>
+        <button @click="updateSettings" :disabled="loading.updateSettings"
+          class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center space-x-2">
+          <svg v-if="loading.updateSettings" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none"
+               viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4l-3 3 3 3H4z"></path>
+          </svg>
+          <span>Update Settings</span>
+        </button>
       </div>
     </div>
 
@@ -58,12 +93,10 @@
     <div class="bg-white rounded-xl shadow-md p-6">
       <h1 class="text-2xl font-bold mb-2 text-center">Live Metrics</h1>
 
-      <!-- Metrics disconnected banner -->
       <div v-if="!metricsConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
         Metrics connection lost. Reconnecting…
       </div>
 
-      <!-- Last update -->
       <div class="text-sm text-gray-500 mb-2 text-right">
         Last updated: [[ metricsLastUpdated ? metricsLastUpdated.toLocaleTimeString() : '—' ]]
       </div>
@@ -91,12 +124,10 @@
     <div class="bg-white rounded-xl shadow-md p-6">
       <h2 class="text-xl font-semibold mb-2 text-center">Connected Devices</h2>
 
-      <!-- Devices disconnected banner -->
       <div v-if="!devicesConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
         Devices connection lost. Reconnecting…
       </div>
 
-      <!-- Last update -->
       <div class="text-sm text-gray-500 mb-2 text-right">
         Last updated: [[ devicesLastUpdated ? devicesLastUpdated.toLocaleTimeString() : '—' ]]
       </div>
@@ -146,12 +177,14 @@
         `,
           computed: {
             headerClass() {
-              return this.type === 'success' ? 'bg-blue-600 text-white' : 'bg-red-600 text-white';
+              if (this.type === 'success') return 'bg-blue-600 text-white';
+              if (this.type === 'error') return 'bg-red-600 text-white';
+              if (this.type === 'info') return 'bg-yellow-600 text-white';
             },
             bodyClass() {
-              return this.type === 'success'
-                ? 'bg-blue-100 text-blue-800'
-                : 'bg-red-100 text-red-800';
+              if (this.type === 'success') return 'bg-blue-100 text-blue-800';
+              if (this.type === 'error') return 'bg-red-100 text-red-800';
+              if (this.type === 'info') return 'bg-yellow-100 text-yellow-800';
             }
           }
         }
@@ -169,7 +202,12 @@
           lastValidSettings: {},
           metricsSource: null,
           devicesSource: null,
-          toasts: []
+          toasts: [],
+          loading: {
+            start: false,
+            stop: false,
+            updateSettings: false
+          }
         };
       },
 
@@ -191,6 +229,9 @@
         },
 
         async startMetrics() {
+          if (this.loading.start) return;
+          this.loading.start = true;
+          this.showToast("Starting metrics...", "info");
           try {
             const res = await fetch("/metrics/start", { method: "POST" });
             const data = await res.json();
@@ -198,10 +239,15 @@
             this.showToast(data.message, "success");
           } catch (err) {
             this.showToast(err.message || "Network error", "error");
+          } finally {
+            this.loading.start = false;
           }
         },
 
         async stopMetrics() {
+          if (this.loading.stop) return;
+          this.loading.stop = true;
+          this.showToast("Stopping metrics...", "info");
           try {
             const res = await fetch("/metrics/stop", { method: "POST" });
             const data = await res.json();
@@ -209,10 +255,15 @@
             this.showToast(data.message, "success");
           } catch (err) {
             this.showToast(err.message || "Network error", "error");
+          } finally {
+            this.loading.stop = false;
           }
         },
 
         async updateSettings() {
+          if (this.loading.updateSettings) return;
+          this.loading.updateSettings = true;
+          this.showToast("Updating settings...", "info");
           try {
             const res = await fetch("/metrics/settings", {
               method: "POST",
@@ -229,6 +280,8 @@
           } catch (err) {
             this.settings = { ...this.lastValidSettings };
             this.showToast(err.message || "Network error", "error");
+          } finally {
+            this.loading.updateSettings = false;
           }
         },
 
@@ -241,10 +294,8 @@
 
         connectMetricsStream() {
           if (this.metricsSource) this.metricsSource.close();
-
           const connect = () => {
             this.metricsSource = new EventSource("/metrics/stream");
-
             this.metricsSource.onmessage = (event) => {
               try {
                 const data = JSON.parse(event.data);
@@ -257,7 +308,6 @@
                 console.warn("Failed to parse metrics SSE data:", err);
               }
             };
-
             this.metricsSource.onerror = () => {
               this.metricsConnected = false;
               console.warn("Metrics SSE disconnected. Reconnecting in 2s...");
@@ -265,16 +315,13 @@
               setTimeout(connect, 2000);
             };
           };
-
           connect();
         },
 
         connectDevicesStream() {
           if (this.devicesSource) this.devicesSource.close();
-
           const connect = () => {
             this.devicesSource = new EventSource("/metrics/devices/stream");
-
             this.devicesSource.onmessage = (event) => {
               try {
                 this.devices = JSON.parse(event.data);
@@ -284,7 +331,6 @@
                 console.warn("Failed to parse devices SSE data:", err);
               }
             };
-
             this.devicesSource.onerror = () => {
               this.devicesConnected = false;
               console.warn("Devices SSE disconnected. Reconnecting in 2s...");
@@ -292,7 +338,6 @@
               setTimeout(connect, 2000);
             };
           };
-
           connect();
         }
       },
