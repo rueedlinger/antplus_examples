@@ -97,7 +97,7 @@
       </div>
 
       <div class="text-sm text-gray-500 mb-2 text-right">
-        Last updated: [[ metricsLastUpdated ? metricsLastUpdated.toLocaleTimeString() : '—' ]]
+        Last updated: {{ metricsLastUpdated ? metricsLastUpdated.toLocaleTimeString() : '—' }}
       </div>
 
       <table class="table-auto w-full text-sm border-collapse border border-gray-300">
@@ -128,13 +128,13 @@
       </div>
 
       <div class="text-sm text-gray-500 mb-2 text-right">
-        Last updated: [[ devicesLastUpdated ? devicesLastUpdated.toLocaleTimeString() : '—' ]]
+        Last updated: {{ devicesLastUpdated ? devicesLastUpdated.toLocaleTimeString() : '—' }}
       </div>
 
       <ul class="divide-y divide-gray-200">
         <li v-for="device in devices" :key="device.device_id" class="py-2 flex justify-between text-sm">
-          <span class="font-medium">[[ device.name ]]</span>
-          <span>ID: [[ device.device_id ]] | Type: [[ device.device_type ]]</span>
+          <span class="font-medium">{{ device.name }}</span>
+          <span>ID: {{ device.device_id }} | Type: {{ device.device_type }}</span>
         </li>
       </ul>
     </div>
@@ -145,16 +145,14 @@
     const { createApp } = Vue;
 
     createApp({
-      delimiters: ['[[', ']]'],
 
       components: {
         'metric-row': {
-          delimiters: ['[[', ']]'],
           props: ['label', 'value', 'inactive'],
           template: `
           <tr :class="inactive ? 'bg-gray-100 text-gray-400' : ''">
-            <td class="border border-gray-300 px-4 py-2 font-medium">[[ label ]]</td>
-            <td class="border border-gray-300 px-4 py-2">[[ value ?? '—' ]]</td>
+            <td class="border border-gray-300 px-4 py-2 font-medium">{{ label }}</td>
+            <td class="border border-gray-300 px-4 py-2">{{ value ?? '—' }}</td>
           </tr>
         `
         },
@@ -162,15 +160,14 @@
         'alert': {
           props: ['type', 'title', 'message'],
           emits: ['close'],
-          delimiters: ['[[', ']]'],
           template: `
           <div role="alert" class="rounded-md shadow-lg overflow-hidden w-80">
             <div :class="headerClass" class="font-bold px-4 py-2 flex justify-between items-center">
-              <span>[[ title ]]</span>
+              <span>{{ title }}</span>
               <button @click="$emit('close')" class="font-bold ml-4">&times;</button>
             </div>
             <div :class="bodyClass" class="px-4 py-3">
-              <p>[[ message ]]</p>
+              <p>{{ message }}</p>
             </div>
           </div>
         `,
@@ -219,7 +216,6 @@
       },
 
       methods: {
-        // Show toast with action in title
         showToast(message, type = "success", action = "") {
           const title = action ? `${action} - ${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info'}` 
                                : type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info';
