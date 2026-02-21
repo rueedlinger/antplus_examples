@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 import json
 import logging
@@ -10,9 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.ant import Metrics
 from contextlib import asynccontextmanager
 
+from app.core import setup_logging
 from app.model import MetricsModel, MetricsSettingsModel, SensorModel
 
-logging.basicConfig(level=logging.INFO)
+
+setup_logging()
 
 
 shutdown_event = asyncio.Event()  # shared shutdown flag
