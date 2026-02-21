@@ -15,9 +15,15 @@ from openant.devices.scanner import Scanner
 
 from openant.devices.utilities import auto_create_device
 
+from app.model import MetricsModel, MetricsSettingsModel
+
 
 class Metrics:
-    def __init__(self, filter_device_ids: List[int] = [], wheel_circumference_m=0.141):
+    def __init__(
+        self,
+        filter_device_ids: List[int] = [],
+        metrics_settings: MetricsSettingsModel = MetricsSettingsModel(),
+    ):
         self.logger = logging.getLogger("app.ant.metrics")
 
         self.node = None
@@ -25,22 +31,28 @@ class Metrics:
         self.lock = threading.Lock()
         self.devices: List[AntPlusDevice] = []
 
-        self.wheel_circumference_m = self.set_wheel_circumference(wheel_circumference_m)
+        if metrics_settings is None:
+            self.metrics_settings: MetricsSettingsModel = MetricsSettingsModel()
+        else:
+            self.metrics_settings = metrics_settings
         self.filter_device_ids = self.set_filter_device_ids(filter_device_ids)
         self._reset_metrics()
         self.is_running = False
 
-    def set_wheel_circumference(self, circumference_m):
-        if circumference_m <= 0:
-            self.logger.warning(
-                f"Invalid wheel circumference value: {circumference_m}. Must be > 0."
+    def set_metrics_settings(self, metrics_settings: MetricsSettingsModel):
+        self.logger.debug(f"Setting metrics settings: {metrics_settings}")
+        if metrics_settings is None:
+            self.logger.warning("Received None for metrics settings, ignoring update")
+            raise ValueError(
+                "Metrics settings must be a valid MetricsSettingsModel object"
             )
-            raise ValueError("Wheel circumference must be a positive number")
-        self.logger.debug(f"Wheel circumference updated to {circumference_m} m")
-        self.wheel_circumference_m = circumference_m
+        self.metrics_settings = metrics_settings
+
+    def get_metrics_settings(self) -> MetricsSettingsModel:
+        self.logger.debug(f"Getting metrics settings: {self.metrics_settings}")
+        return self.metrics_settings
 
     def set_filter_device_ids(self, filter_device_ids: List[int]):
-        
 
         # Validate that all entries are integers
         if not all(isinstance(id, int) for id in filter_device_ids):
@@ -48,7 +60,7 @@ class Metrics:
                 f"Invalid filter_device_ids: {filter_device_ids}. All entries must be integers."
             )
             raise ValueError("All device IDs in filter_device_ids must be integers")
-        
+
         if filter_device_ids is None:
             filter_device_ids = []
 
@@ -101,21 +113,24 @@ class Metrics:
 
             self._reset_metrics()
 
-    def get_metrics(self, round_values=True):
+    def get_metrics(self, round_values=True) -> MetricsModel:
         metrics = {
             "power": self.power,
             "speed": self.speed,
             "cadence": self.cadence,
             "distance": self.distance,
             "heart_rate": self.heart_rate,
-            "wheel_circumference_m": self.wheel_circumference_m,
             "is_running": self.is_running,
+            "heart_rate_percent": self.heart_rate_percent,
+            "zone_name": self.zone_name,
+            "zone_value": self.zone_value
         }
         if round_values:
             for key in ["power", "speed", "cadence", "distance", "heart_rate"]:
                 if metrics[key] is not None:
                     metrics[key] = round(metrics[key], 2)
-        return metrics
+        
+        return MetricsModel(**metrics)
 
     def _reset_metrics(self):
         self.power = None
@@ -123,6 +138,10 @@ class Metrics:
         self.cadence = None
         self.distance = None
         self.heart_rate = None
+        self.heart_rate_percent = None
+        self.zone_name = None
+        self.zone_value = None
+        self.zone = None
 
     def get_devices(self):
         return [
@@ -149,8 +168,25 @@ class Metrics:
                 self.heart_rate = data.heart_rate
 
             if isinstance(data, BikeSpeedData):
-                self.speed = data.calculate_speed(self.wheel_circumference_m)
-                self.distance = data.calculate_distance(self.wheel_circumference_m)
+                speed_wheel_circumference = (
+                    self.metrics_settings.speed_wheel_circumference_m
+                )
+                if (
+                    speed_wheel_circumference is not None
+                    and speed_wheel_circumference > 0
+                ):
+                    self.speed = data.calculate_speed(speed_wheel_circumference)
+
+                distance_wheel_circumference = (
+                    self.metrics_settings.distance_wheel_circumference_m
+                )
+                if (
+                    distance_wheel_circumference is not None
+                    and distance_wheel_circumference > 0
+                ):
+                    self.distance = data.calculate_distance(
+                        distance_wheel_circumference
+                    )
 
             if isinstance(data, PowerData):
                 self.power = data.average_power

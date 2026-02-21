@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Metrics Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+<div id="app" class="max-w-5xl mx-auto space-y-6">
+
+  <!-- Control Card -->
+  <div class="bg-white rounded-xl shadow-md p-6 text-center space-y-4">
+    <h2 class="text-xl font-semibold">Control Metrics</h2>
+    <div class="flex justify-center space-x-4">
+      <button @click="startMetrics" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Start</button>
+      <button @click="stopMetrics" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Stop</button>
+    </div>
+    <alert v-if="controlMessage"
+           :type="controlMessageType"
+           :title="controlMessageType === 'success' ? 'Success' : 'Error'"
+           :message="controlMessage"
+           @close="controlMessage=''"/>
+  </div>
+
+  <!-- Settings Card -->
+  <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
+    <h2 class="text-xl font-semibold text-center">Settings</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="text-sm font-medium">Speed Wheel Circumference (m)</label>
+        <input type="number" step="0.001" min="0" v-model.number="settings.speed_wheel_circumference_m"
+               class="border rounded px-2 py-1 w-full" />
+      </div>
+      <div>
+        <label class="text-sm font-medium">Distance Wheel Circumference (m)</label>
+        <input type="number" step="0.001" min="0" v-model.number="settings.distance_wheel_circumference_m"
+               class="border rounded px-2 py-1 w-full" />
+      </div>
+      <div>
+        <label class="text-sm font-medium">Age</label>
+        <input type="number" min="1" v-model.number="settings.age"
+               class="border rounded px-2 py-1 w-full" />
+      </div>
+    </div>
+    <div class="text-center">
+      <button @click="updateSettings" class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update Settings</button>
+    </div>
+    <alert v-if="settingsMessage"
+           :type="settingsMessageType"
+           :title="settingsMessageType === 'success' ? 'Success' : 'Error'"
+           :message="settingsMessage"
+           @close="settingsMessage=''"/>
+  </div>
+
+  <!-- Live Metrics Table -->
+  <div class="bg-white rounded-xl shadow-md p-6">
+    <h1 class="text-2xl font-bold mb-4 text-center">Live Metrics</h1>
+    <table class="table-auto w-full text-sm border-collapse border border-gray-300">
+      <thead>
+        <tr class="bg-gray-200">
+          <th class="border border-gray-300 px-4 py-2">Metric</th>
+          <th class="border border-gray-300 px-4 py-2">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template v-for="(value, key) in metrics" :key="key">
+          <metric-row
+            :label="key === 'heart_rate_percent' ? 'HR %' 
+                     : key === 'is_running' ? 'Running' 
+                     : key.charAt(0).toUpperCase() + key.slice(1)"
+            :value="key === 'is_running' ? (value ? 'Yes' : 'No') 
+                     : key === 'heart_rate_percent' ? formattedPercent 
+                     : value ?? '—'"
+            />
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Devices -->
+  <div class="bg-white rounded-xl shadow-md p-6">
+    <h2 class="text-xl font-semibold mb-4 text-center">Connected Devices</h2>
+    <ul class="divide-y divide-gray-200">
+      <li v-for="device in devices" :key="device.device_id" class="py-2 flex justify-between text-sm">
+        <span class="font-medium">[[ device.name ]]</span>
+        <span>ID: [[ device.device_id ]] | Type: [[ device.device_type ]]</span>
+      </li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  delimiters: ['[[', ']]'],
+
+  components: {
+    'metric-row': {
+  delimiters: ['[[', ']]'],   // add this line
+  props: ['label', 'value', 'inactive'],
+  template: `
+    <tr :class="inactive ? 'bg-gray-100 text-gray-400' : ''">
+      <td class="border border-gray-300 px-4 py-2 font-medium">[[ label ]]</td>
+      <td class="border border-gray-300 px-4 py-2">[[ value ?? '—' ]]</td>
+    </tr>
+  `
+},
+
+    'alert': {
+      props: ['type','title','message'],
+      emits: ['close'],
+      delimiters: ['[[', ']]'],
+      template: `
+        <div role="alert" class="mb-2 rounded-md overflow-hidden shadow">
+          <div :class="headerClass" class="font-bold px-4 py-2 flex justify-between items-center">
+            <span>[[ title ]]</span>
+            <button @click="$emit('close')" class="font-bold ml-4">&times;</button>
+          </div>
+          <div :class="bodyClass" class="px-4 py-3">
+            <p>[[ message ]]</p>
+          </div>
+        </div>
+      `,
+      computed: {
+        headerClass() {
+          return this.type === 'success' ? 'bg-blue-500 text-white' : 'bg-red-500 text-white';
+        },
+        bodyClass() {
+          return this.type === 'success'
+            ? 'border border-t-0 border-blue-400 rounded-b bg-blue-100 text-blue-700'
+            : 'border border-t-0 border-red-400 rounded-b bg-red-100 text-red-700';
+        }
+      },
+      mounted() { setTimeout(() => this.$emit('close'), 5000); }
+    }
+  },
+
+  data() {
+    return {
+      metrics: {
+        power: '—',
+        speed: '—',
+        cadence: '—',
+        distance: '—',
+        heart_rate: '—',
+        heart_rate_percent: '—',
+        zone: 'Unknown',
+        is_running: false
+      },
+      devices: [],
+      settings: { speed_wheel_circumference_m: null, distance_wheel_circumference_m: null, age: null },
+      lastValidSettings: {},
+      controlMessage: "",
+      controlMessageType: "",
+      settingsMessage: "",
+      settingsMessageType: "",
+      metricsSource: null,
+      devicesSource: null
+    };
+  },
+
+  computed: {
+    formattedPercent() {
+      return this.metrics.heart_rate_percent != null && this.metrics.heart_rate_percent !== '—'
+        ? this.metrics.heart_rate_percent.toFixed(1) + " %"
+        : "—";
+    }
+  },
+
+  methods: {
+    async startMetrics() {
+      try {
+        const res = await fetch("/metrics/start", { method: "POST" });
+        const data = await res.json();
+        this.controlMessage = data.message;
+        this.controlMessageType = res.ok ? "success" : "error";
+      } catch { this.controlMessage = "Network error"; this.controlMessageType = "error"; }
+    },
+
+    async stopMetrics() {
+      try {
+        const res = await fetch("/metrics/stop", { method: "POST" });
+        const data = await res.json();
+        this.controlMessage = data.message;
+        this.controlMessageType = res.ok ? "success" : "error";
+      } catch { this.controlMessage = "Network error"; this.controlMessageType = "error"; }
+    },
+
+    async updateSettings() {
+      try {
+        const res = await fetch("/metrics/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(this.settings)
+        });
+        if (!res.ok) {
+          this.settingsMessageType = 'error';
+          this.settingsMessage = res.status === 422
+            ? "Validation error"
+            : "Error: " + res.statusText;
+          this.settings = { ...this.lastValidSettings };
+          return;
+        }
+        const data = await res.json();
+        this.settingsMessage = data.message || "Settings updated";
+        this.settingsMessageType = "success";
+        this.lastValidSettings = { ...this.settings };
+      } catch (err) {
+        this.settingsMessage = "Network error: " + err;
+        this.settingsMessageType = "error";
+        this.settings = { ...this.lastValidSettings };
+      }
+    },
+
+    connectMetricsStream() {
+      if (this.metricsSource) this.metricsSource.close();
+      this.metricsSource = new EventSource("http://127.0.0.1:8000/metrics/stream");
+      this.metricsSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        for (let key in this.metrics) {
+          if (key === 'is_running') this.metrics[key] = data[key] ?? false;
+          else this.metrics[key] = data[key] !== null ? data[key] : '—';
+        }
+      };
+      this.metricsSource.onerror = (err) => { console.error("Metrics SSE error", err); this.metricsSource.close(); };
+    },
+
+    connectDevicesStream() {
+      if (this.devicesSource) this.devicesSource.close();
+      this.devicesSource = new EventSource("http://127.0.0.1:8000/metrics/devices/stream");
+      this.devicesSource.onmessage = (event) => { this.devices = JSON.parse(event.data); };
+      this.devicesSource.onerror = (err) => { console.error("Devices SSE error", err); this.devicesSource.close(); };
+    },
+
+    async loadSettings() {
+      try {
+        const res = await fetch("/metrics/settings");
+        if (res.ok) {
+          this.settings = await res.json();
+          this.lastValidSettings = { ...this.settings };
+        }
+      } catch (err) { console.error(err); }
+    }
+
+  },
+
+  mounted() {
+    this.loadSettings();
+    this.connectMetricsStream();
+    this.connectDevicesStream();
+  }
+
+}).mount("#app");
+</script>
+
+</body>
+</html>

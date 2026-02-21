@@ -2,15 +2,17 @@ import asyncio
 import time
 import json
 import logging
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.ant import Metrics
 from contextlib import asynccontextmanager
+
+from app.model import MetricsModel, MetricsSettingsModel, SensorModel
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,7 +20,9 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- startup ----
-    app.state.metrics = Metrics()
+    app.state.metrics = Metrics(metrics_settings=MetricsSettingsModel(
+        age=45, speed_wheel_circumference_m=0.141, distance_wheel_circumference_m=0.141
+    ))
     yield
     # ---- shutdown ----
     if app.state.metrics:
@@ -28,35 +32,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ANT+ Metrics Service", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-class WheelCircumferenceUpdate(BaseModel):
-    wheel_circumference_m: float = Field(
-        ..., gt=0, description="Wheel circumference in meters"
-    )
-
-
-class SensorModel(BaseModel):
-    device_id: int
-    device_type: int
-    name: str
-
-
-class MetricsResponse(BaseModel):
-    power: Optional[float]
-    speed: Optional[float]
-    cadence: Optional[float]
-    distance: Optional[float]
-    heart_rate: Optional[int]
-    wheel_circumference_m: float
-    is_running: bool
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or your frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # -------------------------
 # Metrics endpoints
 # -------------------------
-
-
 @app.post("/metrics/start")
 def start_metrics():
     max_retries = 3
@@ -83,22 +72,29 @@ def stop_metrics():
         raise HTTPException(status_code=500, detail=f"Failed to stop metrics: {str(e)}")
 
 
-@app.post("/metrics/wheel_circumference")
-def update_wheel_circumference(payload: WheelCircumferenceUpdate):
+@app.post("/metrics/settings")
+def update_metrics_settings(payload: MetricsSettingsModel):
     try:
-        app.state.metrics.set_wheel_circumference(payload.wheel_circumference_m)
-        return {
-            "message": f"Wheel circumference updated to {payload.wheel_circumference_m} m"
-        }
+        app.state.metrics.set_metrics_settings(payload)
+        return {"message": f"Metrics settings updated to {payload}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update: {str(e)}")
 
 
-@app.get("/metrics", response_model=MetricsResponse)
+@app.get("/metrics/settings", response_model=MetricsSettingsModel)
+def get_metrics_settings():
+    try:
+        settings = app.state.metrics.get_metrics_settings()
+        return settings
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get settings: {str(e)}")
+
+
+@app.get("/metrics", response_model=MetricsModel)
 def get_metrics():
     try:
         metrics = app.state.metrics.get_metrics()
-        return MetricsResponse(**metrics)
+        return metrics
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
 
@@ -119,7 +115,7 @@ async def metrics_event_generator():
             metrics = app.state.metrics.get_metrics()
 
             # Convert to JSON string
-            data = json.dumps(metrics)
+            data = json.dumps(metrics.dict())
 
             # SSE format: `data: <payload>\n\n`
             yield f"data: {data}\n\n"
@@ -141,15 +137,12 @@ async def stream_metrics():
 
 
 async def device_event_generator():
-    last_devices = []
+    
     while True:
-        try:
+        try:            
             # Get current devices from app state
-            devices = app.state.metrics.get_devices()  # returns list of dicts
-            # Only yield if changed
-            if devices != last_devices:
-                last_devices = devices
-                yield f"data: {json.dumps(devices)}\n\n"
+            devices = app.state.metrics.get_devices()  # returns list of dicts    
+            yield f"data: {json.dumps(devices)}\n\n"
             await asyncio.sleep(1)  # adjust frequency as needed
         except asyncio.CancelledError:
             # client disconnected
@@ -164,6 +157,6 @@ async def stream_devices():
     return StreamingResponse(device_event_generator(), media_type="text/event-stream")
 
 
-@app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+@app.get("/")
+def dashboard():
+    return FileResponse("static/dashboard.html")
