@@ -80,54 +80,18 @@
     </div>
 
     <!-- Live Metrics Table -->
-    <div class="bg-white rounded-xl shadow-md p-6">
-      <h1 class="text-2xl font-bold mb-2 text-center">Live Metrics</h1>
-
-      <div v-if="!metricsConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
-        Metrics connection lost. Reconnecting…
-      </div>
-
-      <div class="text-sm text-gray-500 mb-2 text-right">
-        Last updated: {{ metricsLastUpdated ? metricsLastUpdated.toLocaleTimeString() : '—' }}
-      </div>
-
-      <table class="table-auto w-full text-sm border-collapse border border-gray-300">
-        <thead>
-          <tr class="bg-gray-200">
-            <th class="border border-gray-300 px-4 py-2">Metric</th>
-            <th class="border border-gray-300 px-4 py-2">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          <MetricRow
-            v-for="(value, key) in metrics"
-            :key="key"
-            :label="key"
-            :value="value"
-          />
-        </tbody>
-      </table>
-    </div>
+    <LiveMetrics
+      :metrics="metrics"
+      :metricsLastUpdated="metricsLastUpdated"
+      :metricsConnected="metricsConnected"
+    />
 
     <!-- Devices Table -->
-    <div class="bg-white rounded-xl shadow-md p-6">
-      <h2 class="text-xl font-semibold mb-2 text-center">Connected Devices</h2>
-
-      <div v-if="!devicesConnected" class="bg-yellow-200 text-yellow-800 p-2 rounded text-center mb-2">
-        Devices connection lost. Reconnecting…
-      </div>
-
-      <div class="text-sm text-gray-500 mb-2 text-right">
-        Last updated: {{ devicesLastUpdated ? devicesLastUpdated.toLocaleTimeString() : '—' }}
-      </div>
-
-      <ul class="divide-y divide-gray-200">
-        <li v-for="device in devices" :key="device.device_id" class="py-2 flex justify-between text-sm">
-          <span class="font-medium">{{ device.name }}</span>
-          <span>ID: {{ device.device_id }} | Type: {{ device.device_type }}</span>
-        </li>
-      </ul>
-    </div>
+    <ConnectedDevices
+      :devices="devices"
+      :devicesLastUpdated="devicesLastUpdated"
+      :devicesConnected="devicesConnected"
+    />
 
     <!-- Footer -->
 <footer class="bg-gray-200 text-gray-700 text-center py-4 mt-6 rounded-xl shadow-inner">
@@ -148,13 +112,15 @@
 
 <script>
 import Alert from "./components/Alert.vue";
+import ConnectedDevices from "./components/ConnectedDevices.vue";
+import LiveMetrics from "./components/LiveMetrics.vue";
 import MetricRow from "./components/MetricRow.vue";
 import { API } from "./config.js";
 import axios from "axios";
 
 export default {
   name: "App",
-  components: { Alert, MetricRow },
+  components: { Alert, MetricRow, LiveMetrics, ConnectedDevices},
 
   data() {
     return {
