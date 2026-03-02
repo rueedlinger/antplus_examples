@@ -9,7 +9,7 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 RELOAD="${RELOAD:-true}"
 TIMEOUT_GRACEFUL_SHUTDOWN="${TIMEOUT_GRACEFUL_SHUTDOWN:-1}"
-LOG_CONFIG="${LOG_CONFIG:-logging.conf}"
+LOG_CONFIG="${LOG_CONFIG:-${SCRIPT_DIR}/logging.conf}"
 APP_MODULE="${APP_MODULE:-app.api:app}"
 
 echo "🚀 Starting server on ${HOST}:${PORT}..."
