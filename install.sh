@@ -5,7 +5,7 @@ set -o pipefail
 # -----------------------
 # Step 0: Clone repository
 # -----------------------
-REPO_DIR="antplus-metrics"
+REPO_DIR="amwa"
 REPO_URL="https://github.com/rueedlinger/${REPO_DIR}"
 
 echo "📥 Cloning repository..."
@@ -57,6 +57,7 @@ fi
 echo "Python version: $(python3 --version)"
 
 # Create a virtual environment if it doesn't exist
+# to install uv
 VENV_DIR=".venv"
 if [ ! -d "$VENV_DIR" ]; then
     echo "⚡ Creating virtual environment..."
