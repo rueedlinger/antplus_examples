@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve the directory of the script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Default values (can be overridden by env vars)
+# Add project root to Python path
+export PYTHONPATH="${SCRIPT_DIR}/..:$PYTHONPATH"
+
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 RELOAD="${RELOAD:-true}"
@@ -18,7 +19,6 @@ echo "   Reload: ${RELOAD}"
 echo "   Graceful shutdown timeout: ${TIMEOUT_GRACEFUL_SHUTDOWN}s"
 echo "   Log config: ${LOG_CONFIG}"
 
-# Activate the virtual environment relative to the script
 source "${SCRIPT_DIR}/.venv/bin/activate"
 
 CMD=(
