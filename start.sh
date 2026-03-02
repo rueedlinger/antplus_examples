@@ -3,8 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Add project root to Python path
-export PYTHONPATH="${SCRIPT_DIR}/..:$PYTHONPATH"
+# Add project root to Python path (works even if PYTHONPATH is unset)
+export PYTHONPATH="${SCRIPT_DIR}/..:${PYTHONPATH:-}"
 
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
