@@ -3,6 +3,7 @@ import pathlib
 import time
 import json
 import logging
+from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,12 +18,12 @@ from app.model import (
     IntervalProgressModel,
     MetricsModel,
     MetricsSettingsModel,
-    SensorModel,
+    DeviceModel,
 )
 from app.workout import Timer
 
 
-METRICS_DELAY_SECONDS = 0.5
+METRICS_DELAY_SECONDS = 1
 DEVICES_DELAY_SECONDS = 1
 WORKOUT_DELAY_SECONDS = 0.1
 
@@ -139,11 +140,11 @@ def get_metrics():
         raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
 
 
-@app.get("/metrics/devices", response_model=list[SensorModel])
+@app.get("/metrics/devices", response_model=list[DeviceModel])
 def get_metrics_devices():
     try:
         devices = app.state.metrics.get_devices()
-        return [SensorModel(**d) for d in devices]
+        return [DeviceModel(**d) for d in devices]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get devices: {str(e)}")
 
@@ -183,8 +184,13 @@ async def device_event_generator():
         try:
             # Get current devices from app state
             # devices = app.state.metrics.get_devices()  # returns list of dicts
-            devices = await asyncio.to_thread(app.state.metrics.get_devices)
-            yield f"data: {json.dumps(devices)}\n\n"
+            devices: List[DeviceModel] = await asyncio.to_thread(
+                app.state.metrics.get_devices
+            )
+            data = json.dumps([device.model_dump() for device in devices])
+
+            # SSE format: `data: <payload>\n\n`
+            yield f"data: {data}\n\n"
             await asyncio.sleep(DEVICES_DELAY_SECONDS)  # adjust frequency as needed
         except asyncio.CancelledError:
             # client disconnected

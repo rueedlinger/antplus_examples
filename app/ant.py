@@ -17,7 +17,7 @@ from openant.devices.scanner import Scanner
 
 from openant.devices.utilities import auto_create_device
 
-from app.model import MetricsModel, MetricsSettingsModel, SportZone
+from app.model import MetricsModel, MetricsSettingsModel, DeviceModel, SportZone
 from app.util import CumulativeSumMap, MetricsKey, TimedMap, TimedMovingAverage
 
 
@@ -192,13 +192,12 @@ class Metrics:
         self.last_sensor_update = None
         self.last_sensor_name = None
 
-    def get_devices(self):
+    def get_devices(self) -> List[DeviceModel]:
+
         return [
-            {
-                "device_id": dev.device_id,
-                "device_type": dev.device_type,
-                "name": dev.name,
-            }
+            DeviceModel(
+                device_id=dev.device_id, device_type=dev.device_type, name=dev.name
+            )
             for dev in self.devices
         ]
 

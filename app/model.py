@@ -93,7 +93,7 @@ class MetricsSettingsModel(BaseModel):
     age: Optional[int] = Field(None, gt=0, description="User age in years")
 
 
-class SensorModel(BaseModel):
+class DeviceModel(BaseModel):
     device_id: int
     device_type: int
     name: str
