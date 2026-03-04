@@ -85,11 +85,11 @@
 
           GitHub:
           <a
-            href="https://github.com/rueedlinger/antplus-metrics"
+            href="https://github.com/rueedlinger/amwa"
             target="_blank"
             class="underline font-semibold hover:text-gray-800"
           >
-            antplus-metrics
+            amwa
           </a>
         </p>
       </footer>
