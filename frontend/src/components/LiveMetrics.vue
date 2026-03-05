@@ -250,6 +250,8 @@ const chartGroups = [
 const history = ref([]);
 const openCharts = ref(chartGroups.reduce((acc, g) => ({ ...acc, [g.id]: true }), {}));
 
+const skipped = (ctx, value) => (ctx.p0.skip || ctx.p1.skip ? value : undefined);
+
 watch(
   metrics,
   (newMetrics) => {
@@ -280,6 +282,10 @@ function getChartDataForGroup(group) {
         data: history.value.map((h) => (h[key] != null ? Math.round(h[key]) : null)),
         borderColor: '#7c3aed',
         tension: 0.3,
+        spanGaps: true,
+        segment: {
+          borderDash: (ctx) => skipped(ctx, [3, 3]),
+        },
       });
     }
     datasets.push({
@@ -287,6 +293,10 @@ function getChartDataForGroup(group) {
       data: history.value.map((h) => (h[`ma_${key}`] != null ? Math.round(h[`ma_${key}`]) : null)),
       borderColor: '#EC4899',
       tension: 0.3,
+      spanGaps: true,
+      segment: {
+        borderDash: (ctx) => skipped(ctx, [3, 3]),
+      },
     });
   });
   return { labels, datasets };
