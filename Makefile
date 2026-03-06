@@ -1,49 +1,56 @@
-# Makefile for FastAPI + Vue (Vite) project
-
 .DEFAULT_GOAL := help
 
-.PHONY: help sync frontend-sync format lint lint-frontend format-frontend check test run run-backend run-frontend ci clean
+.PHONY: help sync backend-sync frontend-sync format format-check lint lint-frontend format-frontend check test run-backend run-frontend ci clean cli
 
 # -----------------------
-# General help
+# Help
 # -----------------------
 help:
 	@echo "Available targets:"
-	@echo "  sync             Install/sync Python dependencies"
+	@echo "  sync     Install dependencies"
+	@echo "  backend-sync     Install Python dependencies"
 	@echo "  frontend-sync    Install Node dependencies"
-	@echo "  format           Auto-format Python code with ruff"
-	@echo "  format-frontend  Auto-format frontend code with prettier/eslint"
-	@echo "  lint             Lint Python code with ruff"
-	@echo "  lint-frontend    Lint frontend code with eslint"
-	@echo "  check            Run format + lint (Python + frontend)"
-	@echo "  test             Run Python unit tests with coverage"
-	@echo "  run-backend      Run FastAPI app only"
-	@echo "  run-frontend     Run Vue (Vite) frontend only"
-	@echo "  run              Run backend + frontend concurrently"
-	@echo "  ci               Full CI pipeline"
-	@echo "  clean            Remove cache files"
+	@echo "  format           Format Python code"
+	@echo "  format-check     Check formatting (CI)"
+	@echo "  lint             Lint Python code"
+	@echo "  lint-frontend    Lint frontend"
+	@echo "  format-frontend  Format frontend"
+	@echo "  check            Run all format + lint"
+	@echo "  test             Run Python tests"
+	@echo "  run-backend      Run FastAPI backend"
+	@echo "  run-frontend     Run Vue frontend"	
+	@echo "  ci               CI pipeline"
+	@echo "  clean            Clean cache files"
 
 # -----------------------
-# Dependency sync
+# Dependencies
 # -----------------------
-sync:
+sync: backend-sync frontend-sync
+
+backend-sync:
 	uv -V
 	uv sync --all-groups
 
 frontend-sync:
 	cd frontend && npm ci
 
+build-frontend:
+	cd frontend && npm run build
+
 # -----------------------
-# Python formatting & linting
+# Python formatting
 # -----------------------
 format:
 	uv run ruff format .
 
+format-check:
+	uv run ruff format --check .
+
 lint:
-	uv run ruff check --fix
+	uv run ruff check .
 
 # -----------------------
-# Frontend formatting & linting
+# Frontend
 # -----------------------
 format-frontend:
 	cd frontend && npm run format
@@ -52,15 +59,15 @@ lint-frontend:
 	cd frontend && npm run lint
 
 # -----------------------
-# Check all code
+# Checks
 # -----------------------
 check: format lint format-frontend lint-frontend
 
 # -----------------------
-# Python tests
+# Tests
 # -----------------------
 test:
-	uv run coverage run -m pytest -v -s
+	uv run coverage run -m pytest -v
 	uv run coverage html
 	uv run coverage report -m
 
@@ -71,32 +78,31 @@ cli:
 	uv run python -m app.cli
 
 # -----------------------
-# Run backend / frontend
+# Run
 # -----------------------
 BACKEND_PORT ?= 8000
+VITE_PORT ?= 3000
 
 run-backend:
-	@echo "Running FastAPI app on http://127.0.0.1:$(BACKEND_PORT)"
-	uv run uvicorn app.api:app --reload --port $(BACKEND_PORT) --timeout-graceful-shutdown 1 --log-config logging.conf
+	@echo "Running FastAPI on http://127.0.0.1:$(BACKEND_PORT)"
+	uv run uvicorn app.api:app \
+		--reload \
+		--port $(BACKEND_PORT)
+		
 
 run-frontend:
-	@echo "Running Vite dev server on http://localhost:5173"
-	cd frontend && npm run dev
-
-# Run backend + frontend concurrently (requires & or tmux)
-run:
-	@echo "Running backend + frontend"
-	$(MAKE) run-backend & $(MAKE) run-frontend
+	@echo "Running Vite dev server on port $(VITE_PORT)"
+	cd frontend && npm run dev  -- --port $(VITE_PORT)
 
 # -----------------------
 # CI
 # -----------------------
-ci: sync frontend-sync check test
+ci: backend-sync frontend-sync format-check lint lint-frontend test
 
 # -----------------------
-# Clean caches
+# Clean
 # -----------------------
 clean:
-	rm -rf .ruff_cache .pytest_cache htmlcov .coverage __pycache__
-	@find . -type d -name "__pycache__" -exec rm -rf {} +
-	@find . -type f -name "*.pyc" -delete
+	rm -rf .ruff_cache .pytest_cache htmlcov .coverage
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
