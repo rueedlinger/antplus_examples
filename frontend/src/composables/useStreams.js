@@ -1,162 +1,193 @@
-// src/composables/useStreams.js
-import { ref, reactive, onMounted, onUnmounted } from 'vue';
+// src/composables/singletonStreams.js
+import { ref, reactive } from 'vue';
 import { API } from '../config.js';
 
-/* =========================================================
-   Reusable SSE Helper
-========================================================= */
+const tabId = Math.random().toString(36).slice(2);
 
-function createSSEStream(url, onData, options = {}) {
-  const { heartbeatMs = 5000, reconnectDelay = 2000 } = options;
+/* ------------------------
+   Metrics Singleton
+------------------------ */
+const metrics = reactive({
+  power: null,
+  ma_power: null,
+  speed: null,
+  ma_speed: null,
+  cadence: null,
+  ma_cadence: null,
+  distance: null,
+  ma_distance: null,
+  heart_rate: null,
+  ma_heart_rate: null,
+  heart_rate_percent: null,
+  ma_heart_rate_percent: null,
+  zone_name: null,
+  zone_description: null,
+  ma_zone_name: null,
+  ma_zone_description: null,
+  is_running: null,
+  last_sensor_update: null,
+  last_sensor_name: null,
+});
+const metricsConnected = ref(false);
+const metricsLastUpdated = ref(null);
+let metricsSource = null;
+let metricsChannel = null;
 
-  const connected = ref(false);
-  const lastUpdated = ref(null);
+function initMetricsStream() {
+  if (metricsSource) return; // already initialized
 
-  let source = null;
-  let heartbeatTimeout = null;
-  let reconnectTimeout = null;
+  metricsChannel = new BroadcastChannel('sse-metrics');
+  metricsChannel.onmessage = (ev) => {
+    if (ev.data.tabId !== tabId) Object.assign(metrics, ev.data.metrics);
+    metricsLastUpdated.value = new Date();
+    metricsConnected.value = true;
+  };
 
-  function clearTimers() {
-    clearTimeout(heartbeatTimeout);
-    clearTimeout(reconnectTimeout);
-  }
+  metricsSource = new EventSource(API.baseUrl + API.endpoints.metricsStream);
+  metricsSource.onopen = () => (metricsConnected.value = true);
 
-  function resetHeartbeat() {
-    clearTimeout(heartbeatTimeout);
-    heartbeatTimeout = setTimeout(() => {
-      connected.value = false;
-      source?.close();
-      scheduleReconnect();
-    }, heartbeatMs);
-  }
+  metricsSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      Object.assign(metrics, data);
+      metricsLastUpdated.value = new Date();
+      metricsConnected.value = true;
 
-  function scheduleReconnect() {
-    if (reconnectTimeout) return;
-    reconnectTimeout = setTimeout(() => {
-      reconnectTimeout = null;
-      connect();
-    }, reconnectDelay);
-  }
-
-  function connect() {
-    clearTimers();
-    if (source) source.close();
-
-    source = new EventSource(url);
-
-    source.onopen = () => {
-      connected.value = true;
-      resetHeartbeat();
-    };
-
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        onData(data);
-        lastUpdated.value = new Date();
-        connected.value = true;
-        resetHeartbeat();
-      } catch (err) {
-        console.warn('SSE parse error:', err);
-      }
-    };
-
-    source.onerror = () => {
-      connected.value = false;
-      source?.close();
-      scheduleReconnect();
-    };
-  }
-
-  onMounted(connect);
-
-  onUnmounted(() => {
-    clearTimers();
-    source?.close();
-  });
-
-  return { connected, lastUpdated };
-}
-
-/* =========================================================
-   METRICS STREAM
-========================================================= */
-
-export function useMetricsStream() {
-  // Predefine all expected keys to ensure reactivity
-  const metrics = reactive({
-    power: null,
-    ma_power: null,
-    speed: null,
-    ma_speed: null,
-    cadence: null,
-    ma_cadence: null,
-    distance: null,
-    ma_distance: null,
-    heart_rate: null,
-    ma_heart_rate: null,
-    heart_rate_percent: null,
-    ma_heart_rate_percent: null,
-    zone_name: null,
-    zone_description: null,
-    ma_zone_name: null,
-    ma_zone_description: null,
-    is_running: null,
-    last_sensor_update: null,
-    last_sensor_name: null,
-  });
-
-  const { connected, lastUpdated } = createSSEStream(
-    API.baseUrl + API.endpoints.metricsStream,
-    (data) => Object.assign(metrics, data)
-  );
-
-  return { metrics, connected, lastUpdated };
-}
-
-/* =========================================================
-   DEVICES STREAM
-========================================================= */
-
-export function useDevicesStream() {
-  const devices = ref([]);
-
-  const { connected, lastUpdated } = createSSEStream(
-    API.baseUrl + API.endpoints.devicesStream,
-    (data) => {
-      devices.value = Array.isArray(data) ? data : [];
+      metricsChannel.postMessage({ tabId, metrics: data });
+    } catch (err) {
+      console.warn('Metrics SSE parse error', err);
     }
-  );
+  };
 
-  return { devices, connected, lastUpdated };
+  metricsSource.onerror = () => {
+    metricsConnected.value = false;
+    metricsSource.close();
+    metricsSource = null;
+    setTimeout(initMetricsStream, 2000);
+  };
 }
 
-/* =========================================================
-   WORKOUT STREAM
-========================================================= */
+/* ------------------------
+   Devices Singleton
+------------------------ */
+const devices = ref([]);
+const devicesConnected = ref(false);
+const devicesLastUpdated = ref(null);
+let devicesSource = null;
+let devicesChannel = null;
 
-export function useWorkoutStream() {
-  const workout = reactive({
-    // Predefine all expected keys to ensure reactivity
-    interval: { seconds: null, name: null },
-    time_spent: null,
-    time_remaining: null,
-    total_time_spent: null,
-    round_number: null,
-    is_running: null,
-  });
+function initDevicesStream() {
+  if (devicesSource) return;
 
-  const { connected, lastUpdated } = createSSEStream(
-    API.baseUrl + API.endpoints.workoutStream,
-    (data) => {
-      // Merge interval object separately to ensure reactivity
+  devicesChannel = new BroadcastChannel('sse-devices');
+  devicesChannel.onmessage = (ev) => {
+    if (ev.data.tabId !== tabId && Array.isArray(ev.data.devices)) {
+      devices.value = ev.data.devices;
+      devicesLastUpdated.value = new Date(ev.data.lastUpdated);
+      devicesConnected.value = ev.data.connected;
+    }
+  };
+
+  devicesSource = new EventSource(API.baseUrl + API.endpoints.devicesStream);
+  devicesSource.onopen = () => (devicesConnected.value = true);
+
+  devicesSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (!Array.isArray(data)) return;
+      devices.value = data;
+      devicesLastUpdated.value = new Date();
+      devicesConnected.value = true;
+
+      devicesChannel.postMessage({
+        tabId,
+        devices: data,
+        lastUpdated: devicesLastUpdated.value,
+        connected: devicesConnected.value,
+      });
+    } catch (err) {
+      console.warn('Devices SSE parse error', err);
+    }
+  };
+
+  devicesSource.onerror = () => {
+    devicesConnected.value = false;
+    devicesSource.close();
+    devicesSource = null;
+    setTimeout(initDevicesStream, 2000);
+  };
+}
+
+/* ------------------------
+   Workout Singleton
+------------------------ */
+const workout = reactive({
+  interval: { seconds: null, name: null },
+  time_spent: null,
+  time_remaining: null,
+  total_time_spent: null,
+  round_number: null,
+  is_running: null,
+});
+const workoutConnected = ref(false);
+const workoutLastUpdated = ref(null);
+let workoutSource = null;
+let workoutChannel = null;
+
+function initWorkoutStream() {
+  if (workoutSource) return;
+
+  workoutChannel = new BroadcastChannel('sse-workout');
+  workoutChannel.onmessage = (ev) => {
+    if (ev.data.tabId !== tabId && ev.data.workout) {
+      Object.assign(workout, ev.data.workout);
+      workoutLastUpdated.value = new Date();
+      workoutConnected.value = true;
+    }
+  };
+
+  workoutSource = new EventSource(API.baseUrl + API.endpoints.workoutStream);
+  workoutSource.onopen = () => (workoutConnected.value = true);
+
+  workoutSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
       if (data.interval) {
         workout.interval.seconds = data.interval.seconds ?? null;
         workout.interval.name = data.interval.name ?? null;
       }
       Object.assign(workout, { ...data, interval: workout.interval });
-    }
-  );
+      workoutLastUpdated.value = new Date();
+      workoutConnected.value = true;
 
-  return { workout, connected, lastUpdated };
+      workoutChannel.postMessage({ tabId, workout: data });
+    } catch (err) {
+      console.warn('Workout SSE parse error', err);
+    }
+  };
+
+  workoutSource.onerror = () => {
+    workoutConnected.value = false;
+    workoutSource.close();
+    workoutSource = null;
+    setTimeout(initWorkoutStream, 2000);
+  };
+}
+
+/* ------------------------
+   Export composables
+------------------------ */
+export function useMetricsStream() {
+  initMetricsStream();
+  return { metrics, connected: metricsConnected, lastUpdated: metricsLastUpdated };
+}
+
+export function useDevicesStream() {
+  initDevicesStream();
+  return { devices, connected: devicesConnected, lastUpdated: devicesLastUpdated };
+}
+
+export function useWorkoutStream() {
+  initWorkoutStream();
+  return { workout, connected: workoutConnected, lastUpdated: workoutLastUpdated };
 }
