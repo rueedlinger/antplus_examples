@@ -71,132 +71,31 @@ Install Python, Node.js, npm, and Git:
 sudo apt install nodejs npm git python3 python3-pip vim -y
 ```
 
-### Configure USB 
-
-To allow non-root access to the ANT+ USB adapter on Raspberry Pi OS Lite, follow these steps:
-
-Add User to `plugdev` Group:
-
-```bash
-sudo usermod -aG plugdev pi
-```
-
-Log out and back in for the group changes to take effect.
-
-Plug in the ANT+ USB adapter and check that it is detected:
-
-```bash
-lsusb
-```
-
-We are interested in obtaining the vendor ID and product ID of the ANT+ USB adapter. Below is the information for Bus 001, Device 004.
-
-```bash
-Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
-Bus 001 Device 002: ID 0424:9514 Microchip Technology, Inc. (formerly SMSC) SMC9514 Hub
-Bus 001 Device 003: ID 0424:ec00 Microchip Technology, Inc. (formerly SMSC) SMSC9512/9514 Fast Ethernet Adapter
-Bus 001 Device 004: ID 0fcf:1008 Dynastream Innovations, Inc. ANTUSB2 Stick
-```
-
-
-We will now create a udev rule.
-
-```bash
-sudo vim /etc/udev/rules.d/99-antusb.rules
-```
-Add the following line, but adapt to your `idVendor` and `idProduct` based on the `lsusb` output.
-
-```
-SUBSYSTEM=="usb", ATTR{idVendor}=="0fcf", ATTR{idProduct}=="1008", GROUP="plugdev", MODE="0660"
-```
-
-Apply the new rule:
-
-```bash
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
-
-Unplug and replug the ANTUSB2 Stick. Check that the device now belongs to the plugdev group:
-
-```bash
-ls -l /dev/bus/usb/001/004
-````
-
-Example output:
-
-```bash
-crw-rw---- 1 root plugdev 189, 4  1. Mär 21:46 /dev/bus/usb/001/004
-```
-
 ### Install
 
+Download the script
+
 ```bash
-wget -O install.sh https://raw.githubusercontent.com/rueedlinger/amwa/refs/heads/main/install.sh
+wget https://raw.githubusercontent.com/rueedlinger/amwa/refs/heads/main/scripts/install.sh -O install.sh
+```
+
+Make it executable
+
+```bash
 chmod +x install.sh
-./install.sh
 ```
 
-### Create a Systemd Service for Auto-Start
-
-You can run your ANT+ metrics app on boot using a **systemd service**.
-
-Open a new systemd service:
+Run it
 
 ```bash
-sudo vim /etc/systemd/system/amwa.service
+sudo ./install.sh
 ```
 
-Add the following content:
-
-```
-[Unit]
-Description=amwa start script
-After=network.target
-
-[Service]
-ExecStart=/home/pi/amwa/start.sh
-WorkingDirectory=/home/pi/amwa
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-User=pi
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start the service:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable amwa
-sudo systemctl start amwa
-```
-
-Check status:
-
-```bash
-sudo systemctl status amwa
-```
-
-## Test
-### Test Install Script with Docker
-```bash
-docker build --build-arg CACHE_BUST=$(date +%s) -t app:latest .
-docker run -it --rm -p 8000:8000 app:latest bash
-```
-
-Then test the install script
-```bash
-./install.sh 
-```
-
-Or directly with
-
-```bash
-docker build --build-arg CACHE_BUST=$(date +%s) -t app:latest .
-docker run -it --rm -p 8000:8000 app:latest /app/install
-```
-
+The script will 
+- git clone the repo
+- build python and node
+- configure usb
+  - add User to `plugdev` Group
+  - create a udev rule for the ANT+ usb adapter
+- create systemctl service
 
