@@ -139,10 +139,48 @@ cp -r $FRONTEND_DIR/dist/. app/dist/
 "
 
 # -----------------------
-# STEP 6: Install systemd service (root)
+# STEP 6: ANT+ USB setup (root)
 # -----------------------
 echo ""
-echo "=== Step 6: Installing systemd service ==="
+echo "=== Step 6: Optional ANT+ USB adapter setup ==="
+
+# Add user to plugdev group
+usermod -aG plugdev "$CURRENT_USER"
+echo "Added $CURRENT_USER to plugdev group. Log out and back in if necessary."
+
+read -r -p "Do you want to configure the ANT+ USB adapter? [yes/no]: " ANTUSB_CHOICE
+
+if [[ "$ANTUSB_CHOICE" == "yes" ]]; then
+   
+
+    # Ask user for path to udev rule file
+    read -r -p "Please provide the path to your ANT+ udev rule file (e.g., antusb.rules): " ANTUSB_RULE_FILE
+
+    # Check that file exists
+    if [ ! -f "$ANTUSB_RULE_FILE" ]; then
+        echo "Error: File '$ANTUSB_RULE_FILE' does not exist. Aborting ANT+ USB setup."
+        exit 1
+    fi
+
+    # Copy the udev rule to /etc/udev/rules.d/
+    UDEV_RULE_DEST="/etc/udev/rules.d/99-antusb.rules"
+    cp "$ANTUSB_RULE_FILE" "$UDEV_RULE_DEST"
+    echo "Copied udev rule to $UDEV_RULE_DEST"
+
+    # Apply the new rule
+    udevadm control --reload-rules
+    udevadm trigger
+    echo "ANT+ USB udev rule applied successfully."
+
+else
+    echo "Skipping ANT+ USB adapter setup."
+fi
+
+# -----------------------
+# STEP 7: Install systemd service (root)
+# -----------------------
+echo ""
+echo "=== Step 7: Installing systemd service ==="
 
 SERVICE_SRC="${REPO_PATH}/scripts/amwa.service"
 
@@ -169,10 +207,10 @@ echo "Starting service..."
 systemctl start amwa
 
 # -----------------------
-# STEP 7: Show service status
+# STEP 8: Show service status
 # -----------------------
 echo ""
-echo "=== Step 7: Service status ==="
+echo "=== Step 8: Service status ==="
 systemctl status amwa --no-pager
 
 echo ""
