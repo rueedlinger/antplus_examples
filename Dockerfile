@@ -16,6 +16,6 @@ ARG CACHE_BUST
 RUN echo "Cache bust value: ${CACHE_BUST}"
 
 # Copy install script
-ADD install.sh .
+ADD scripts/install.sh .
 RUN chmod +x install.sh 
 #RUN chmod +x install.sh && ./install.sh --dry-run

@@ -1,0 +1,16 @@
+```
+[Unit]
+Description=amwa start script
+After=network.target
+
+[Service]
+ExecStart=/home/pi/amwa/scripts/start.sh
+WorkingDirectory=/home/pi/amwa
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+```
