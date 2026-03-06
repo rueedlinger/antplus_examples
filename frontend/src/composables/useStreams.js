@@ -1,27 +1,16 @@
 // src/composables/useStreams.js
-import { ref, reactive, onUnmounted } from 'vue';
+import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { API } from '../config.js';
 
 /* =========================================================
-   STREAM SINGLETON STORE
-   Each stream is created only once per session
+   Reusable SSE Helper
 ========================================================= */
-const streams = {};
 
-/* =========================================================
-   CREATE SSE STREAM SINGLETON
-========================================================= */
-function createSSEStreamSingleton(key, url, onData, options = {}) {
+function createSSEStream(url, onData, options = {}) {
   const { heartbeatMs = 5000, reconnectDelay = 2000 } = options;
-
-  if (streams[key]) {
-    streams[key].subscribers++;
-    return streams[key];
-  }
 
   const connected = ref(false);
   const lastUpdated = ref(null);
-  let subscribers = 1;
 
   let source = null;
   let heartbeatTimeout = null;
@@ -51,7 +40,7 @@ function createSSEStreamSingleton(key, url, onData, options = {}) {
 
   function connect() {
     clearTimers();
-    source?.close();
+    if (source) source.close();
 
     source = new EventSource(url);
 
@@ -68,7 +57,7 @@ function createSSEStreamSingleton(key, url, onData, options = {}) {
         connected.value = true;
         resetHeartbeat();
       } catch (err) {
-        console.warn(`SSE parse error on stream ${key}:`, err);
+        console.warn('SSE parse error:', err);
       }
     };
 
@@ -79,70 +68,95 @@ function createSSEStreamSingleton(key, url, onData, options = {}) {
     };
   }
 
-  function cleanup() {
-    subscribers = Math.max(0, subscribers - 1);
-    if (subscribers <= 0) {
-      clearTimers();
-      source?.close();
-      delete streams[key];
-    }
-  }
+  onMounted(connect);
 
-  streams[key] = { connected, lastUpdated, cleanup, subscribers };
+  onUnmounted(() => {
+    clearTimers();
+    source?.close();
+  });
 
-  connect();
-
-  return streams[key];
-}
-
-/* =========================================================
-   GENERIC STREAM HOOK
-========================================================= */
-function useStream(key, url, initialValue = {}, isArray = false) {
-  const state = isArray ? ref(initialValue) : reactive(initialValue);
-
-  const { connected, lastUpdated, cleanup } = createSSEStreamSingleton(
-    key,
-    url,
-    (data) => (isArray ? (state.value = data) : Object.assign(state, data))
-  );
-
-  onUnmounted(() => cleanup?.());
-
-  return { state, connected, lastUpdated };
+  return { connected, lastUpdated };
 }
 
 /* =========================================================
    METRICS STREAM
 ========================================================= */
+
 export function useMetricsStream() {
-  const { state: metrics, connected, lastUpdated } = useStream(
-    'metrics',
-    API.baseUrl + API.endpoints.metricsStream
+  // Predefine all expected keys to ensure reactivity
+  const metrics = reactive({
+    power: null,
+    ma_power: null,
+    speed: null,
+    ma_speed: null,
+    cadence: null,
+    ma_cadence: null,
+    distance: null,
+    ma_distance: null,
+    heart_rate: null,
+    ma_heart_rate: null,
+    heart_rate_percent: null,
+    ma_heart_rate_percent: null,
+    zone_name: null,
+    zone_description: null,
+    ma_zone_name: null,
+    ma_zone_description: null,
+    is_running: null,
+    last_sensor_update: null,
+    last_sensor_name: null,
+  });
+
+  const { connected, lastUpdated } = createSSEStream(
+    API.baseUrl + API.endpoints.metricsStream,
+    (data) => Object.assign(metrics, data)
   );
+
   return { metrics, connected, lastUpdated };
 }
 
 /* =========================================================
    DEVICES STREAM
 ========================================================= */
+
 export function useDevicesStream() {
-  const { state: devices, connected, lastUpdated } = useStream(
-    'devices',
+  const devices = ref([]);
+
+  const { connected, lastUpdated } = createSSEStream(
     API.baseUrl + API.endpoints.devicesStream,
-    [],
-    true
+    (data) => {
+      devices.value = Array.isArray(data) ? data : [];
+    }
   );
+
   return { devices, connected, lastUpdated };
 }
 
 /* =========================================================
    WORKOUT STREAM
 ========================================================= */
+
 export function useWorkoutStream() {
-  const { state: workout, connected, lastUpdated } = useStream(
-    'workout',
-    API.baseUrl + API.endpoints.workoutStream
+  const workout = reactive({
+    // Predefine all expected keys to ensure reactivity
+    interval: { seconds: null, name: null },
+    time_spent: null,
+    time_remaining: null,
+    total_time_spent: null,
+    round_number: null,
+    is_running: null,
+  });
+
+  const { connected, lastUpdated } = createSSEStream(
+    API.baseUrl + API.endpoints.workoutStream,
+    (data) => {
+      // Merge interval object separately to ensure reactivity
+      if (data.interval) {
+        workout.interval.seconds = data.interval.seconds ?? null;
+        workout.interval.name = data.interval.name ?? null;
+      }
+      Object.assign(workout, { ...data, interval: workout.interval });
+    }
   );
+
   return { workout, connected, lastUpdated };
 }
