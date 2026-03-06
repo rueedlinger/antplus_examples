@@ -107,29 +107,17 @@ def get_status():
 # -------------------------
 @app.post("/metrics/start")
 def start_metrics():
-
-    app.state.is_metrics_runnig = True
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            app.state.metrics.start()
-            return {"message": "Metrics collection started"}
-        except Exception as e:
-            logging.warning(f"Failed to start metrics (attempt {attempt}): {str(e)}")
-            time.sleep(1)  # brief pause before retrying
-
-    # If all retries failed, raise HTTPException
-    app.state.is_metrics_runnig = False
-    raise HTTPException(
-        status_code=500, detail=f"Failed to start metrics after {max_retries} attempts"
-    )
+    try:
+        app.state.metrics.start()
+        return {"message": "Metrics collection started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed start metrcics: {str(e)}")
 
 
 @app.post("/metrics/stop")
 def stop_metrics():
     try:
         app.state.metrics.stop()
-        app.state.is_metrics_runnig = False
         return {"message": "Metrics collection stopped"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stop metrics: {str(e)}")
