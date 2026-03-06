@@ -168,13 +168,17 @@ WantedBy=multi-user.target
 
 Enable and start the service:
 
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable amwa
 sudo systemctl start amwa
+```
 
 Check status:
 
+```bash
 sudo systemctl status amwa
+```
 
 ## Test
 ### Test Install Script with Docker
