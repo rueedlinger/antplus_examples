@@ -152,14 +152,20 @@ function initWorkoutStream() {
   workoutSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.interval) {
-        workout.interval.seconds = data.interval.seconds ?? null;
-        workout.interval.name = data.interval.name ?? null;
-      }
+
+      // Ensure interval object always exists
+      workout.interval = {
+        seconds: data.interval?.seconds ?? null,
+        name: data.interval?.name ?? null,
+      };
+
+      // Merge the rest of the workout data
       Object.assign(workout, { ...data, interval: workout.interval });
+
       workoutLastUpdated.value = new Date();
       workoutConnected.value = true;
 
+      // Broadcast to other tabs
       workoutChannel.postMessage({ tabId, workout: data });
     } catch (err) {
       console.warn('Workout SSE parse error', err);

@@ -34,7 +34,7 @@
 </template>
 
 <script setup>
-import { useDevicesStream } from '../composables/useStreams.js';
+import { useDevicesStream } from '../composables/singletonStreams.js';
 
 const { devices, lastUpdated, connected } = useDevicesStream();
 </script>

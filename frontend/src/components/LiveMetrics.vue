@@ -158,7 +158,7 @@ import {
   CategoryScale,
 } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
-import { useMetricsStream } from '../composables/useStreams.js';
+import { useMetricsStream } from '../composables/singletonStreams.js';
 
 ChartJS.register(
   Title,

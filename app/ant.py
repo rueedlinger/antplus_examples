@@ -26,84 +26,87 @@ class Metrics:
         self,
         metrics_settings: MetricsSettingsModel = MetricsSettingsModel(),
     ):
-        self.logger = logging.getLogger("app.metrics")
+        self._logger = logging.getLogger("app.metrics")
 
-        self.node = None
-        self.node_thread = None
-        self.lock = threading.Lock()
-        self.devices: List[AntPlusDevice] = []
+        self._node = None
+        self._node_thread = None
+        self._lock = threading.Lock()
+        self._devices: List[AntPlusDevice] = []
 
         if metrics_settings is None:
-            self.metrics_settings: MetricsSettingsModel = MetricsSettingsModel()
+            self._metrics_settings: MetricsSettingsModel = MetricsSettingsModel()
         else:
-            self.metrics_settings = metrics_settings
+            self._metrics_settings = metrics_settings
 
         self._reset_metrics()
-        self.is_running = False
+        self._is_running = False
+
+    def is_running(self) -> bool:
+        return self._is_running
 
     def set_metrics_settings(self, metrics_settings: MetricsSettingsModel):
-        self.logger.debug(f"Setting metrics settings: {metrics_settings}")
+        self._logger.debug(f"Setting metrics settings: {metrics_settings}")
         if metrics_settings is None:
-            self.logger.warning("Received None for metrics settings, ignoring update")
+            self._logger.warning("Received None for metrics settings, ignoring update")
             raise ValueError(
                 "Metrics settings must be a valid MetricsSettingsModel object"
             )
-        self.metrics_settings = metrics_settings
-        self.logger.debug(f"Updating metrics_settings: {self.metrics_settings}")
+        self._metrics_settings = metrics_settings
+        self._logger.debug(f"Updating metrics_settings: {self._metrics_settings}")
 
     def get_metrics_settings(self) -> MetricsSettingsModel:
-        return self.metrics_settings
+        return self._metrics_settings
 
     def start(self):
-        with self.lock:  # acquire and release automatically
-            if self.is_running:
-                self.logger.warning("Metrics collection already running")
+        with self._lock:  # acquire and release automatically
+            if self._is_running:
+                self._logger.warning("Metrics collection already running")
                 return
 
             try:
-                self.devices: list[AntPlusDevice] = []
-                self.node = Node()
-                self.node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
+                self._devices: list[AntPlusDevice] = []
+                self._node = Node()
+                self._node.set_network_key(0x00, ANTPLUS_NETWORK_KEY)
 
-                self.scanner = Scanner(self.node, device_id=0, device_type=0)
+                self.scanner = Scanner(self._node, device_id=0, device_type=0)
                 self.scanner.on_found = self._scanner_on_found
 
             except Exception as e:
-                self.logger.warning(
+                self._logger.warning(
                     "Error initializing ANT+ node or scanner", exc_info=True
                 )
-                self.node.stop() if self.node else None
+                self._node.stop() if self._node else None
                 raise e
 
-            self.node_thread = threading.Thread(target=self._run_node, daemon=True)
-            self.node_thread.start()
-            self.is_running = True
+            self._node_thread = threading.Thread(target=self._run_node, daemon=True)
+            self._node_thread.start()
+            self._is_running = True
 
     def stop(self):
-        with self.lock:
-            if not self.is_running:
-                self.logger.warning("Metrics collection already stopped")
+        with self._lock:
+            if not self._is_running:
+                self._logger.warning("Metrics collection already stopped")
                 return
 
-            self.is_running = False
+            self._is_running = False
             self._cleanup_devices()
 
-            if self.node:
+            if self._node:
                 try:
-                    self.logger.debug("Stopping ANT+ node")
-                    self.node.stop()
+                    self._logger.debug("Stopping ANT+ node")
+                    self._node.stop()
                 except Exception:
-                    self.logger.warning("Error stopping ANT+ node", exc_info=True)
+                    self._logger.warning("Error stopping ANT+ node", exc_info=True)
 
             # Wait for thread but don’t block forever
-            if self.node_thread and self.node_thread.is_alive():
-                self.node_thread.join(timeout=1)  # short timeout
+            if self._node_thread and self._node_thread.is_alive():
+                self._node_thread.join(timeout=1)  # short timeout
 
             self._reset_metrics()
 
     def get_metrics(self) -> MetricsModel:
 
-        if self.is_running is False:
+        if self._is_running is False:
             metrics = {
                 "is_running": False,
             }
@@ -128,7 +131,7 @@ class Metrics:
         # heart rate & zone
         heart_rate = self.time_map.get(MetricsKey.HEART_RATE)
         heart_rate_percent = SportZone.percent_from_age(
-            self.metrics_settings.age, heart_rate
+            self._metrics_settings.age, heart_rate
         )
         zone = SportZone.from_hr_percent(heart_rate_percent)
         if zone == SportZone.UNKNOWN:
@@ -136,7 +139,7 @@ class Metrics:
 
         ma_heart_rate = self.timed_moving_average.average(MetricsKey.HEART_RATE)
         ma_heart_rate_percent = SportZone.percent_from_age(
-            self.metrics_settings.age, ma_heart_rate
+            self._metrics_settings.age, ma_heart_rate
         )
         ma_zone = SportZone.from_hr_percent(ma_heart_rate_percent)
         if ma_zone == SportZone.UNKNOWN:
@@ -159,7 +162,7 @@ class Metrics:
             "ma_zone_name": ma_zone.name if ma_zone else None,
             "zone_description": zone.value if zone else None,
             "ma_zone_description": ma_zone.value if ma_zone else None,
-            "is_running": self.is_running,
+            "is_running": self._is_running,
             "last_sensor_update": self.last_sensor_update,
             "last_sensor_name": self.last_sensor_name,
         }
@@ -181,7 +184,7 @@ class Metrics:
             DeviceModel(
                 device_id=dev.device_id, device_type=dev.device_type, name=dev.name
             )
-            for dev in self.devices
+            for dev in self._devices
         ]
 
     def _on_device_data(self, page: int, page_name: str, data: DeviceData):
@@ -190,17 +193,17 @@ class Metrics:
                 cadence = data.calculate_cadence()
                 self.time_map.set(MetricsKey.CADENCE, cadence)
                 self.timed_moving_average.add(MetricsKey.CADENCE, cadence)
-                self.logger.debug("cadence: %s", cadence)
+                self._logger.debug("cadence: %s", cadence)
 
             if isinstance(data, HeartRateData):
                 heart_rate = int(round(data.heart_rate))
                 self.time_map.set(MetricsKey.HEART_RATE, heart_rate)
                 self.timed_moving_average.add(MetricsKey.HEART_RATE, heart_rate)
-                self.logger.debug("heart_rate: %s", heart_rate)
+                self._logger.debug("heart_rate: %s", heart_rate)
 
             if isinstance(data, BikeSpeedData):
                 speed_wheel_circumference_m = (
-                    self.metrics_settings.speed_wheel_circumference_m
+                    self._metrics_settings.speed_wheel_circumference_m
                 )
                 if (
                     speed_wheel_circumference_m is not None
@@ -209,10 +212,10 @@ class Metrics:
                     speed = data.calculate_speed(speed_wheel_circumference_m)
                     self.time_map.set(MetricsKey.SPEED, speed)
                     self.timed_moving_average.add(MetricsKey.SPEED, speed)
-                    self.logger.debug("speed: %s", speed)
+                    self._logger.debug("speed: %s", speed)
 
                 distance_wheel_circumference = (
-                    self.metrics_settings.distance_wheel_circumference_m
+                    self._metrics_settings.distance_wheel_circumference_m
                 )
                 if (
                     distance_wheel_circumference is not None
@@ -221,31 +224,31 @@ class Metrics:
                     distance = data.calculate_distance(distance_wheel_circumference)
                     self.time_map.set(MetricsKey.DISTANCE, distance)
                     self.sum_map.add(MetricsKey.DISTANCE, distance)
-                    self.logger.debug("distance: %s", distance)
+                    self._logger.debug("distance: %s", distance)
 
             if isinstance(data, PowerData):
                 power = int(round(data.instantaneous_power))
                 self.time_map.set(MetricsKey.POWER, power)
                 self.timed_moving_average.add(MetricsKey.POWER, power)
-                self.logger.debug("power: %s", power)
+                self._logger.debug("power: %s", power)
 
             self.last_sensor_update = datetime.now().astimezone()
             self.last_sensor_name = page_name
 
         except Exception:
-            self.logger.warning("Error processing device data update", exc_info=True)
+            self._logger.warning("Error processing device data update", exc_info=True)
 
     def _scanner_on_found(self, device_tuple):
         device_id, device_type, device_trans = device_tuple
 
-        self.logger.debug(
+        self._logger.debug(
             "Found new device with device_id: %s, device_type: %s, device_trans:%s, metrics_settings: %s",
             device_id,
             device_type,
             device_trans,
-            self.metrics_settings,
+            self._metrics_settings,
         )
-        filter_device_ids = self.metrics_settings.device_ids
+        filter_device_ids = self._metrics_settings.device_ids
         if filter_device_ids is None or len(filter_device_ids) == 0:
             self._create_sensor_device(device_id, device_type, device_trans)
         else:
@@ -261,13 +264,13 @@ class Metrics:
             DeviceType.PowerMeter,
         ):
             try:
-                self.logger.info(
+                self._logger.info(
                     "Creating new device with device_id: %s, device_type: %s",
                     device_id,
                     device_type,
                 )
                 dev: AntPlusDevice = auto_create_device(
-                    self.node, device_id, device_type, device_trans
+                    self._node, device_id, device_type, device_trans
                 )
 
                 # print(f"Created device {dev}, type {type(dev)}")
@@ -277,41 +280,41 @@ class Metrics:
 
                 # dev.on_battery = lambda data: self._on_device_battery(data)
 
-                self.devices.append(dev)
+                self._devices.append(dev)
             except Exception:
-                self.logger.warning("Could not auto create device", exc_info=True)
+                self._logger.warning("Could not auto create device", exc_info=True)
 
     def _on_device_battery(self, data: BatteryData):
-        self.logger.debug("BatteryData: %s", data)
+        self._logger.debug("BatteryData: %s", data)
 
     def _run_node(self):
         retries = 0
         while True:
             try:
-                self.logger.debug("Starting ANT+ node")
-                self.is_running = True
-                self.node.start()  # blocking
-                self.logger.debug("Ant+ Node returns from blocking")
+                self._logger.debug("Starting ANT+ node")
+                self._is_running = True
+                self._node.start()  # blocking
+                self._logger.debug("Ant+ Node returns from blocking")
                 # exit loop
                 break
             except Exception:
-                self.logger.warning("Node error", exc_info=True)
+                self._logger.warning("Node error", exc_info=True)
                 retries += 1
-                self.logger.warning("Try node restart (retry={retries})")
+                self._logger.warning("Try node restart (retry={retries})")
                 time.sleep(1)
             finally:
-                self.is_running = False
+                self._is_running = False
 
     def _cleanup_devices(self):
-        for dev in self.devices:
+        for dev in self._devices:
             try:
-                self.logger.debug(
+                self._logger.debug(
                     "Closing channel for device_id: %s, device_type: %s",
                     dev.device_id,
                     dev.device_type,
                 )
                 dev.close_channel()
             except Exception:
-                self.logger.warning("Could not close device channel", exc_info=True)
+                self._logger.warning("Could not close device channel", exc_info=True)
 
-        self.devices.clear()
+        self._devices.clear()

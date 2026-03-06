@@ -9,83 +9,35 @@
           <th class="px-2 py-1 text-left border-b border-dashed border-black/30">Value</th>
         </tr>
       </thead>
-
       <tbody>
-        <!-- Speed Wheel -->
-        <tr class="hover:bg-gray-50 transition">
-          <td class="px-2 py-1 border-b border-dashed border-black/30 text-left">
-            Speed Wheel Circumference (m)
-          </td>
+        <tr v-for="(value, key) in localSettings" :key="key" class="hover:bg-gray-50 transition">
+          <td class="px-2 py-1 border-b border-dashed border-black/30 text-left">{{ formatLabel(key) }}</td>
           <td class="px-2 py-1 border-b border-dashed border-black/30">
             <input
-              v-model.number="localSettings.speed_wheel_circumference_m"
+              v-if="key !== 'device_ids'"
+              v-model.number="localSettings[key]"
               type="number"
               step="0.001"
               min="0"
-              :disabled="isRunning || loading"
+              :disabled="loading"
               class="border rounded px-2 py-1 w-full bg-white/50"
-              placeholder="0.000"
             />
-            <p class="text-xs text-gray-500 mt-1">Optional. Leave empty for null.</p>
-          </td>
-        </tr>
-
-        <!-- Distance Wheel -->
-        <tr class="hover:bg-gray-50 transition">
-          <td class="px-2 py-1 border-b border-dashed border-black/30 text-left">
-            Distance Wheel Circumference (m)
-          </td>
-          <td class="px-2 py-1 border-b border-dashed border-black/30">
             <input
-              v-model.number="localSettings.distance_wheel_circumference_m"
-              type="number"
-              step="0.001"
-              min="0"
-              :disabled="isRunning || loading"
-              class="border rounded px-2 py-1 w-full bg-white/50"
-              placeholder="0.000"
-            />
-            <p class="text-xs text-gray-500 mt-1">Optional. Leave empty for null.</p>
-          </td>
-        </tr>
-
-        <!-- Age -->
-        <tr class="hover:bg-gray-50 transition">
-          <td class="px-2 py-1 border-b border-dashed border-black/30 text-left">Age</td>
-          <td class="px-2 py-1 border-b border-dashed border-black/30">
-            <input
-              v-model.number="localSettings.age"
-              type="number"
-              min="1"
-              :disabled="isRunning || loading"
-              class="border rounded px-2 py-1 w-full bg-white/50"
-              placeholder="18"
-            />
-            <p class="text-xs text-gray-500 mt-1">Optional. Leave empty for null.</p>
-          </td>
-        </tr>
-
-        <!-- Device IDs -->
-        <tr class="hover:bg-gray-50 transition">
-          <td class="px-2 py-1 border-b border-dashed border-black/30 text-left">Device IDs</td>
-          <td class="px-2 py-1 border-b border-dashed border-black/30">
-            <input
+              v-else
               v-model="deviceIdsInput"
               type="text"
-              :disabled="isRunning || loading"
+              :disabled="loading"
               class="border rounded px-2 py-1 w-full bg-white/50"
               placeholder="e.g. 1,2,3"
             />
-            <p class="text-xs text-gray-500 mt-1">Comma separated values. Leave empty for null.</p>
           </td>
         </tr>
       </tbody>
     </table>
 
-    <!-- Submit -->
     <div class="flex justify-center mt-4">
       <button
-        :disabled="loading || isRunning"
+        :disabled="loading"
         class="px-6 py-2 rounded-2xl font-semibold bg-gradient-to-r from-purple-500 to-blue-400 text-white shadow disabled:opacity-50"
         @click="submitSettings"
       >
@@ -97,18 +49,17 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, onMounted, computed } from 'vue';
+import { reactive, ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import { API } from '../config.js';
 import { ToastType } from '../constants/toastType.js';
-import { useMetricsStream } from '../composables/useStreams.js';
 
 const emit = defineEmits(['show-toast']);
 const loading = ref(false);
 
-const { metrics } = useMetricsStream();
-const isRunning = computed(() => !!metrics.is_running);
-
+// -----------------------------
+// Reactive settings
+// -----------------------------
 const localSettings = reactive({
   speed_wheel_circumference_m: null,
   distance_wheel_circumference_m: null,
@@ -116,44 +67,60 @@ const localSettings = reactive({
   device_ids: null,
 });
 
-/*
-|--------------------------------------------------------------------------
-| Device IDs Mapper (String <-> Array)
-|--------------------------------------------------------------------------
-*/
+// -----------------------------
+// Device IDs computed mapper
+// -----------------------------
 const deviceIdsInput = computed({
   get() {
-    if (!localSettings.device_ids || !Array.isArray(localSettings.device_ids)) return '';
-    return localSettings.device_ids.join(',');
+    return Array.isArray(localSettings.device_ids)
+      ? localSettings.device_ids.join(',')
+      : '';
   },
   set(value) {
-    if (!value || value.trim() === '') {
-      localSettings.device_ids = null;
-      return;
-    }
-
-    localSettings.device_ids = value
+    const cleaned = value
       .split(',')
-      .map((v) => Number(v.trim()))
-      .filter((v) => !isNaN(v));
+      .map(v => v.trim())
+      .filter(v => v !== '')   // remove empty values first
+      .map(v => Number(v))
+      .filter(v => !isNaN(v));
+
+    localSettings.device_ids = cleaned.length ? cleaned : null;
   },
 });
 
-/*
-|--------------------------------------------------------------------------
-| Load Settings
-|--------------------------------------------------------------------------
-*/
+// -----------------------------
+// Helper to format label
+// -----------------------------
+function formatLabel(key) {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// -----------------------------
+// Update localSettings safely
+// -----------------------------
+function updateLocalSettings(data) {
+  if (!data) return;
+  for (const key in localSettings) {
+    if (data[key] !== undefined) {
+      if (Array.isArray(data[key])) {
+        localSettings[key] = [...data[key]];
+      } else {
+        localSettings[key] = data[key];
+      }
+    }
+  }
+}
+
+// -----------------------------
+// Load settings from API
+// -----------------------------
 async function loadSettings() {
   try {
     const { data } = await axios.get(API.baseUrl + API.endpoints.getSettings);
+    updateLocalSettings(data);
 
-    Object.assign(localSettings, {
-      speed_wheel_circumference_m: data.speed_wheel_circumference_m ?? null,
-      distance_wheel_circumference_m: data.distance_wheel_circumference_m ?? null,
-      age: data.age ?? null,
-      device_ids: data.device_ids ? [...data.device_ids] : null,
-    });
+    // Save to localStorage for cross-tab sync
+    localStorage.setItem('settings_shared', JSON.stringify(data));
   } catch (err) {
     emit('show-toast', {
       message: err.response?.data?.message || err.message || 'Failed to load settings',
@@ -163,30 +130,24 @@ async function loadSettings() {
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Submit Settings (Reload After Save = FIX)
-|--------------------------------------------------------------------------
-*/
+// -----------------------------
+// Submit settings
+// -----------------------------
 async function submitSettings() {
   if (loading.value) return;
   loading.value = true;
 
   try {
     const payload = {
-      speed_wheel_circumference_m: localSettings.speed_wheel_circumference_m ?? null,
-      distance_wheel_circumference_m: localSettings.distance_wheel_circumference_m ?? null,
-      age: localSettings.age ?? null,
-      device_ids:
-        localSettings.device_ids && localSettings.device_ids.length
-          ? [...localSettings.device_ids]
-          : null,
+      ...localSettings,
+      device_ids: Array.isArray(localSettings.device_ids) ? [...localSettings.device_ids] : null,
     };
 
     await axios.post(API.baseUrl + API.endpoints.updateSettings, payload);
 
-    // 🔥 CRITICAL FIX: Always reload after save
-    await loadSettings();
+    // Update local state and localStorage so other tabs see it
+    updateLocalSettings(payload);
+    localStorage.setItem('settings_shared', JSON.stringify(payload));
 
     emit('show-toast', {
       message: 'Settings updated successfully!',
@@ -195,11 +156,7 @@ async function submitSettings() {
     });
   } catch (err) {
     emit('show-toast', {
-      message:
-        err.response?.data?.detail ||
-        err.response?.data?.message ||
-        err.message ||
-        'Failed to update settings',
+      message: err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to update settings',
       title: 'Error',
       type: ToastType.ERROR,
     });
@@ -208,14 +165,38 @@ async function submitSettings() {
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Auto reload when stopped
-|--------------------------------------------------------------------------
-*/
-watch(isRunning, (running) => {
-  if (!running) loadSettings();
+// -----------------------------
+// Sync across tabs
+// -----------------------------
+function handleStorageChange(event) {
+  if (event.key === 'settings_shared' && event.newValue) {
+    try {
+      const data = JSON.parse(event.newValue);
+      updateLocalSettings(data);
+    } catch {}
+  }
+}
+
+// -----------------------------
+// Initial load
+// -----------------------------
+onMounted(() => {
+  // Load cached settings instantly
+  const cached = localStorage.getItem('settings_shared');
+  if (cached) {
+    try {
+      const data = JSON.parse(cached);
+      updateLocalSettings(data);
+    } catch {}
+  }
+
+  // Fetch fresh settings from API
+  loadSettings();
+
+  window.addEventListener('storage', handleStorageChange);
 });
 
-onMounted(loadSettings);
+onUnmounted(() => {
+  window.removeEventListener('storage', handleStorageChange);
+});
 </script>
