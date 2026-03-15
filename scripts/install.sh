@@ -10,6 +10,16 @@ LOG_FILE="$(eval echo "~$SUDO_USER")/amwa_install.log"
 # -----------------------
 # HELPERS
 # -----------------------
+log() {
+    echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+log_cmd() {
+    log ">>> $*"
+    set -o pipefail
+    "$@" 2>&1 | tee -a "$LOG_FILE"
+}
+
 run_as_user() {
     log ">>> Running as $CURRENT_USER: $*"
     sudo -u "$CURRENT_USER" bash -c "$*" 2>&1 | tee -a "$LOG_FILE"
@@ -17,15 +27,6 @@ run_as_user() {
 
 run_in_repo() {
     run_as_user "cd \"$REPO_PATH\" && $*"
-}
-
-log() {
-    echo -e "$1" | tee -a "$LOG_FILE"
-}
-
-log_cmd() {
-    log ">>> $*"
-    "$@" 2>&1 | tee -a "$LOG_FILE"
 }
 
 # -----------------------
@@ -61,8 +62,6 @@ fi
 CURRENT_USER=${SUDO_USER:-$(whoami)}
 log "Running commands as user: $CURRENT_USER"
 
-
-
 # -----------------------
 # CONFIGURATION
 # -----------------------
@@ -94,7 +93,8 @@ if [[ "$INSTALL_SOFTWARE" == "yes" ]]; then
     log_cmd apt-get update -y
 
     log "Installing required software..."
-    log_cmd apt-get install -y nodejs npm git python3 python3-pip python3-venv vim nginx
+    deps=(nodejs npm git python3 python3-pip python3-venv vim nginx)
+    log_cmd apt-get install -y "${deps[@]}"
 
     log "System update and software installation complete."
 else
@@ -122,7 +122,6 @@ log ""
 log "=== STEP 3: Checking dependencies ==="
 
 dependencies=(python3 node npm git)
-
 for cmd in "${dependencies[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         log "Error: $cmd is not installed."
@@ -139,12 +138,8 @@ fi
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d. -f1)
 NPM_VERSION=$(npm -v | cut -d. -f1)
 
-if (( NODE_VERSION < 16 )); then
-    log "Warning: Node.js version >=16 recommended."
-fi
-if (( NPM_VERSION < 8 )); then
-    log "Warning: npm version >=8 recommended."
-fi
+(( NODE_VERSION < 16 )) && log "Warning: Node.js version >=16 recommended."
+(( NPM_VERSION < 8 )) && log "Warning: npm version >=8 recommended."
 
 log "Python version: $(python3 --version)"
 log "Node version: $(node -v)"
@@ -157,14 +152,7 @@ log "Git version: $(git --version)"
 log ""
 log "=== STEP 4: Setting up Python virtual environment ==="
 
-run_in_repo <<'EOF'
-if [ ! -d "$SETUP_VENV_DIR" ]; then
-    python3 -m venv "$SETUP_VENV_DIR"
-fi
-source "$SETUP_VENV_DIR/bin/activate"
-pip install --upgrade pip
-pip install uv
-EOF
+run_in_repo "if [ ! -d \"$SETUP_VENV_DIR\" ]; then python3 -m venv \"$SETUP_VENV_DIR\"; fi; source \"$SETUP_VENV_DIR/bin/activate\"; pip install --upgrade pip; pip install uv"
 
 # -----------------------
 # STEP 5: Build backend
@@ -172,10 +160,7 @@ EOF
 log ""
 log "=== STEP 5: Building backend ==="
 
-run_in_repo <<'EOF'
-source "$SETUP_VENV_DIR/bin/activate"
-uv sync --all-groups --active
-EOF
+run_in_repo "source \"$SETUP_VENV_DIR/bin/activate\"; uv sync --all-groups --active"
 
 # -----------------------
 # STEP 6: Build frontend
@@ -183,11 +168,8 @@ EOF
 log ""
 log "=== STEP 6: Building frontend ==="
 
-if run_as_user "[ -d '$REPO_PATH/$FRONTEND_DIR' ]"; then
-    run_in_repo <<EOF
-npm ci --include=dev --prefix "$FRONTEND_DIR"
-npm run build --prefix "$FRONTEND_DIR"
-EOF
+if run_as_user "[ -d \"$REPO_PATH/$FRONTEND_DIR\" ]"; then
+    run_in_repo "npm ci --include=dev --prefix \"$FRONTEND_DIR\"; npm run build --prefix \"$FRONTEND_DIR\""
 else
     log "Warning: Frontend directory '$FRONTEND_DIR' does not exist."
     exit 1
@@ -208,7 +190,6 @@ if [ -d "$FRONTEND_BUILD_DIR" ]; then
 
     log "Copying new frontend build to $WEB_ROOT..."
     cp -r "$FRONTEND_BUILD_DIR"/* "$WEB_ROOT"/
-
     chown -R www-data:www-data "$WEB_ROOT"
     log "Frontend deployed successfully."
 else
@@ -224,22 +205,13 @@ log "=== STEP 8: Optional Nginx configuration ==="
 
 read -r -p "Configure Nginx for AMWA frontend? [yes/no]: " CONFIGURE_NGINX
 if [[ "$CONFIGURE_NGINX" == "yes" ]]; then
-    if ! command -v nginx >/dev/null 2>&1; then
-        log "Error: nginx not installed."
-        exit 1
-    fi
+    command -v nginx >/dev/null 2>&1 || { log "Error: nginx not installed."; exit 1; }
 
     NGINX_DEST="/etc/nginx/sites-available/default"
 
-    if [ ! -f "$NGINX_TEMPLATE" ]; then
-        log "Error: Nginx template not found: $NGINX_TEMPLATE"
-        exit 1
-    fi
+    [ ! -f "$NGINX_TEMPLATE" ] && { log "Error: Nginx template not found: $NGINX_TEMPLATE"; exit 1; }
 
-    if [ ! -f "${NGINX_DEST}.bak" ]; then
-        log "Backing up existing Nginx config..."
-        cp "$NGINX_DEST" "${NGINX_DEST}.bak"
-    fi
+    [ ! -f "${NGINX_DEST}.bak" ] && cp "$NGINX_DEST" "${NGINX_DEST}.bak"
 
     sed "s|WWW_ROOT|$WEB_ROOT|g" "$NGINX_TEMPLATE" > "$NGINX_DEST"
 
@@ -264,10 +236,7 @@ log "=== STEP 9: Optional ANT+ USB adapter setup ==="
 
 read -r -p "Configure ANT+ USB adapter? [yes/no]: " ANTUSB_CHOICE
 if [[ "$ANTUSB_CHOICE" == "yes" ]]; then
-    if [ ! -f "$ANTUSB_TEMPLATE" ]; then
-        log "Error: ANT+ udev template not found: $ANTUSB_TEMPLATE"
-        exit 1
-    fi
+    [ ! -f "$ANTUSB_TEMPLATE" ] && { log "Error: ANT+ udev template not found: $ANTUSB_TEMPLATE"; exit 1; }
 
     log "Adding $CURRENT_USER to plugdev group..."
     usermod -aG plugdev "$CURRENT_USER"
@@ -299,15 +268,9 @@ log "=== STEP 10: Install systemd service ==="
 
 read -r -p "Install AMWA service? [yes/no]: " INSTALL_SERVICE
 if [[ "$INSTALL_SERVICE" == "yes" ]]; then
-    if [ ! -f "$SERVICE_TEMPLATE" ]; then
-        log "Error: Service template not found: $SERVICE_TEMPLATE"
-        exit 1
-    fi
+    [ ! -f "$SERVICE_TEMPLATE" ] && { log "Error: Service template not found: $SERVICE_TEMPLATE"; exit 1; }
 
-    if [ -f "$SERVICE_FILE" ]; then
-        log "Backing up existing service..."
-        cp "$SERVICE_FILE" "${SERVICE_FILE}.bak"
-    fi
+    [ -f "$SERVICE_FILE" ] && cp "$SERVICE_FILE" "${SERVICE_FILE}.bak"
 
     cp "$SERVICE_TEMPLATE" "$SERVICE_FILE"
 
