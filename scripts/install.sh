@@ -53,7 +53,7 @@ run_as_user() {
 # CONFIGURATION
 # -----------------------
 USER_HOME=$(eval echo "~$CURRENT_USER")
-SETUP_VENV_DIR="$(dirname "$USER_HOME")/.setup"
+SETUP_VENV_DIR="${USER_HOME}/.setup"
 
 REPO_DIR="amwa"
 REPO_URL="https://github.com/rueedlinger/${REPO_DIR}"
