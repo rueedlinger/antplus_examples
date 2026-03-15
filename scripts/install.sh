@@ -2,7 +2,12 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-LOG_FILE="$(eval echo "~$SUDO_USER")/amwa_install.log"
+# -----------------------
+# USER CONFIG
+# -----------------------
+CURRENT_USER=${SUDO_USER:-$(whoami)}
+USER_HOME=$(eval echo "~$CURRENT_USER")
+LOG_FILE="${USER_HOME}/amwa_install.log"
 
 # Truncate log at start
 > "$LOG_FILE"
@@ -11,18 +16,17 @@ LOG_FILE="$(eval echo "~$SUDO_USER")/amwa_install.log"
 # HELPERS
 # -----------------------
 log() {
-    echo -e "$1" | tee -a "$LOG_FILE"
+    echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
 log_cmd() {
     log ">>> $*"
-    set -o pipefail
     "$@" 2>&1 | tee -a "$LOG_FILE"
 }
 
 run_as_user() {
     log ">>> Running as $CURRENT_USER: $*"
-    sudo -u "$CURRENT_USER" bash -c "$*" 2>&1 | tee -a "$LOG_FILE"
+    sudo -u "$CURRENT_USER" bash -c "$*"
 }
 
 run_in_repo() {
@@ -59,22 +63,17 @@ if [[ "$CONFIRM" != "yes" ]]; then
     exit 1
 fi
 
-CURRENT_USER=${SUDO_USER:-$(whoami)}
 log "Running commands as user: $CURRENT_USER"
 
 # -----------------------
 # CONFIGURATION
 # -----------------------
-USER_HOME=$(eval echo "~$CURRENT_USER")
 SETUP_VENV_DIR="${USER_HOME}/.setup"
-
 REPO_DIR="amwa"
 REPO_URL="https://github.com/rueedlinger/${REPO_DIR}"
-
 FRONTEND_DIR="frontend"
 SERVICE_FILE="/etc/systemd/system/amwa.service"
 REPO_PATH="${USER_HOME}/${REPO_DIR}"
-
 TEMPLATE_DIR="${REPO_PATH}/templates"
 ANTUSB_TEMPLATE="${TEMPLATE_DIR}/99-antusb.rules.template"
 SERVICE_TEMPLATE="${TEMPLATE_DIR}/amwa.service.template"
@@ -152,14 +151,13 @@ log "Git version: $(git --version)"
 log ""
 log "=== STEP 4: Setting up Python virtual environment ==="
 
-# If venv exists, remove it (safe: ensures clean state)
 if [ -d "$SETUP_VENV_DIR" ]; then
     log "Removing existing virtual environment at $SETUP_VENV_DIR..."
     rm -rf "$SETUP_VENV_DIR"
 fi
 
-
-run_in_repo "if [ ! -d \"$SETUP_VENV_DIR\" ]; then python3 -m venv \"$SETUP_VENV_DIR\"; fi; source \"$SETUP_VENV_DIR/bin/activate\"; pip install --upgrade pip; pip install uv"
+run_in_repo "python3 -m venv \"$SETUP_VENV_DIR\""
+run_in_repo "source \"$SETUP_VENV_DIR/bin/activate\" && pip install --upgrade pip uv"
 
 # -----------------------
 # STEP 5: Build backend
@@ -167,7 +165,7 @@ run_in_repo "if [ ! -d \"$SETUP_VENV_DIR\" ]; then python3 -m venv \"$SETUP_VENV
 log ""
 log "=== STEP 5: Building backend ==="
 
-run_in_repo "source \"$SETUP_VENV_DIR/bin/activate\"; uv sync --all-groups --active"
+run_in_repo "source \"$SETUP_VENV_DIR/bin/activate\" && uv sync --all-groups --active"
 
 # -----------------------
 # STEP 6: Build frontend
@@ -175,8 +173,9 @@ run_in_repo "source \"$SETUP_VENV_DIR/bin/activate\"; uv sync --all-groups --act
 log ""
 log "=== STEP 6: Building frontend ==="
 
-if run_as_user "[ -d \"$REPO_PATH/$FRONTEND_DIR\" ]"; then
-    run_in_repo "npm ci --include=dev --prefix \"$FRONTEND_DIR\"; npm run build --prefix \"$FRONTEND_DIR\""
+if [ -d "$REPO_PATH/$FRONTEND_DIR" ]; then
+    run_in_repo "npm ci --include=dev --prefix \"$FRONTEND_DIR\""
+    run_in_repo "npm run build --prefix \"$FRONTEND_DIR\""
 else
     log "Warning: Frontend directory '$FRONTEND_DIR' does not exist."
     exit 1
@@ -220,7 +219,7 @@ if [[ "$CONFIGURE_NGINX" == "yes" ]]; then
 
     [ ! -f "${NGINX_DEST}.bak" ] && cp "$NGINX_DEST" "${NGINX_DEST}.bak"
 
-    sed "s|WWW_ROOT|$WEB_ROOT|g" "$NGINX_TEMPLATE" > "$NGINX_DEST"
+    sed "s|WWW_ROOT|${WEB_ROOT}|g" "$NGINX_TEMPLATE" > "$NGINX_DEST"
 
     log "Testing nginx configuration..."
     if nginx -t 2>&1 | tee -a "$LOG_FILE"; then
@@ -247,6 +246,7 @@ if [[ "$ANTUSB_CHOICE" == "yes" ]]; then
 
     log "Adding $CURRENT_USER to plugdev group..."
     usermod -aG plugdev "$CURRENT_USER"
+    log "Note: You may need to log out and log back in for plugdev group changes to take effect."
 
     log "Listing USB devices..."
     lsusb | tee -a "$LOG_FILE"
