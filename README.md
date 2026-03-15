@@ -4,6 +4,8 @@
 
 It enables monitoring of cycling and fitness metrics from ANT+ sensors through a lightweight web interface.
 
+![AMWA UI](doc/ui.png)
+
 ---
 
 ## Features
@@ -19,6 +21,12 @@ It enables monitoring of cycling and fitness metrics from ANT+ sensors through a
 - Web-based dashboard accessible via browser
 - Optional Nginx configuration for frontend hosting
 - Systemd service for automatic backend startup
+
+**Display Metrcis as chart**
+![AMWA UI](doc/charts.png)
+
+**Display Metrcis as table**
+![AMWA UI](doc/table.png)
 
 ---
 
