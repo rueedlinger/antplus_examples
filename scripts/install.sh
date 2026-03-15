@@ -2,7 +2,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-LOG_FILE="/var/log/amwa_install.log"
+LOG_FILE="${HOME}/amwa_install.log"
 
 log() {
     echo -e "$1" | tee -a "$LOG_FILE"
@@ -58,6 +58,26 @@ USER_HOME=$(eval echo "~$CURRENT_USER")
 REPO_PATH="${USER_HOME}/${REPO_DIR}"
 
 # -----------------------
+# STEP PRE-0: Optional system update and install dependencies
+# -----------------------
+log ""
+log "=== STEP PRE-0: Update system and install required software ==="
+
+read -r -p "Do you want to update the system and install required software (nodejs, npm, git, python3, python3-pip, python3-venv, vim, nginx)? [yes/no]: " INSTALL_SOFTWARE
+
+if [[ "$INSTALL_SOFTWARE" == "yes" ]]; then
+    log "Updating package lists..."
+    apt-get update -y | tee -a "$LOG_FILE"
+
+    log "Installing required software..."
+    apt-get install -y nodejs npm git python3 python3-pip python3-venv vim nginx | tee -a "$LOG_FILE"
+
+    log "System update and software installation complete."
+else
+    log "Skipping system update and software installation."
+fi
+
+# -----------------------
 # STEP 0: Clone repository
 # -----------------------
 log ""
@@ -75,7 +95,7 @@ chown -R "$CURRENT_USER":"$CURRENT_USER" "$REPO_PATH"
 # -----------------------
 log ""
 log "=== Step 1: Checking dependencies ==="
-dependencies=(python3 python3-venv node npm git)
+dependencies=(python3 node npm git)
 
 for cmd in "${dependencies[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -83,6 +103,13 @@ for cmd in "${dependencies[@]}"; do
         exit 1
     fi
 done
+
+# Check python3-venv package
+if ! python3 -m venv --help >/dev/null 2>&1; then
+    log "Error: python3-venv package is not installed."
+    log "Install it with: sudo apt install python3-venv"
+    exit 1
+fi
 
 # Optional version checks
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d. -f1)
@@ -143,15 +170,39 @@ else
 fi
 
 # -----------------------
-# STEP 5: Copy frontend build
+# STEP 5: Config Nginx
 # -----------------------
 log ""
-log "=== Step 5: Copying frontend build ==="
-run_as_user "
-cd $REPO_PATH
-mkdir -p app/dist
-cp -r $FRONTEND_DIR/dist/. app/dist/
-"
+log "=== Step 5: Configuring nginx ==="
+
+# Check if nginx exists
+if ! command -v nginx >/dev/null 2>&1; then
+    log "Error: nginx is not installed. Please install nginx first."
+    exit 1
+fi
+
+NGINX_SRC="${REPO_PATH}/scripts/nginx.conf"
+NGINX_DEST="/etc/nginx/sites-available/default"
+
+if [ ! -f "$NGINX_SRC" ]; then
+    log "Error: nginx config not found at $NGINX_SRC"
+    exit 1
+fi
+
+log "Backing up existing nginx config..."
+cp "$NGINX_DEST" "${NGINX_DEST}.bak"
+
+log "Copying nginx config..."
+cp "$NGINX_SRC" "$NGINX_DEST"
+
+log "Updating frontend path..."
+sed -i "s|root .*frontend/dist;|root ${REPO_PATH}/frontend/dist;|g" "$NGINX_DEST"
+
+log "Testing nginx configuration..."
+nginx -t
+
+log "Reloading nginx..."
+systemctl reload nginx
 
 # -----------------------
 # STEP 6: Optional ANT+ USB setup

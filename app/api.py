@@ -1,14 +1,10 @@
 import asyncio
-import os
-import pathlib
 import json
 import logging
-import subprocess
 from typing import List
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.ant import Metrics
 from contextlib import asynccontextmanager
@@ -68,34 +64,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Path to frontend build folder inside app/
-build_path = pathlib.Path(__file__).parent / "dist"
-assets_path = build_path / "assets"
-
-logger.info("looking for ui in %s", build_path)
-if build_path.exists() and build_path.is_dir():
-    if assets_path.exists() and assets_path.is_dir():
-        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
-    else:
-        logger.warning(
-            "Assets folder not found at %s, skipping assets mount.", assets_path
-        )
-
-    # Check index.html
-    index_file = build_path / "index.html"
-    if index_file.exists():
-
-        @app.get("/")
-        def root():
-            return FileResponse(index_file)
-    else:
-        logger.warning("index.html not found at %s, skipping assets mount.", index_file)
-
-else:
-    logger.warning(
-        "Frontend build folder not found at %s, skipping frontend mount.", build_path
-    )
 
 
 @app.get("/status")
