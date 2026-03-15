@@ -52,20 +52,22 @@ run_as_user() {
 # -----------------------
 # CONFIGURATION
 # -----------------------
+USER_HOME=$(eval echo "~$CURRENT_USER")
+SETUP_VENV_DIR="$(dirname "$USER_HOME")/.setup"
+
 REPO_DIR="amwa"
 REPO_URL="https://github.com/rueedlinger/${REPO_DIR}"
-VENV_DIR=".setup"
+
 FRONTEND_DIR="frontend"
 SERVICE_FILE="/etc/systemd/system/amwa.service"
 
-USER_HOME=$(eval echo "~$CURRENT_USER")
 REPO_PATH="${USER_HOME}/${REPO_DIR}"
 
 # -----------------------
-# STEP PRE-0: Optional system update and install dependencies
+# STEP 1: Optional system update and install dependencies
 # -----------------------
 log ""
-log "=== STEP PRE-0: Update system and install required software ==="
+log "=== STEP 1: Update system and install required software ==="
 
 read -r -p "Do you want to update the system and install required software (nodejs, npm, git, python3, python3-pip, python3-venv, vim, nginx)? [yes/no]: " INSTALL_SOFTWARE
 
@@ -82,10 +84,10 @@ else
 fi
 
 # -----------------------
-# STEP 0: Clone repository
+# STEP 2: Clone repository
 # -----------------------
 log ""
-log "=== Step 0: Cloning repository ==="
+log "=== Step 2: Cloning repository ==="
 if [ ! -d "$REPO_PATH" ]; then
     run_as_user "git clone $REPO_URL $REPO_PATH"
 else
@@ -95,10 +97,10 @@ fi
 chown -R "$CURRENT_USER":"$CURRENT_USER" "$REPO_PATH"
 
 # -----------------------
-# STEP 1: Check dependencies
+# STEP 3: Check dependencies
 # -----------------------
 log ""
-log "=== Step 1: Checking dependencies ==="
+log "=== Step 3: Checking dependencies ==="
 dependencies=(python3 node npm git)
 
 for cmd in "${dependencies[@]}"; do
@@ -132,36 +134,36 @@ log "npm version: $(npm -v)"
 log "Git version: $(git --version)"
 
 # -----------------------
-# STEP 2: Setup Python environment
+# STEP 4: Setup Python environment
 # -----------------------
 log ""
-log "=== Step 2: Setting up Python virtual environment ==="
+log "=== Step 4: Setting up Python virtual environment ==="
 run_as_user "
 cd $REPO_PATH
-if [ ! -d '$VENV_DIR' ]; then
-    python3 -m venv $VENV_DIR
+if [ ! -d '$SETUP_VENV_DIR' ]; then
+    python3 -m venv $SETUP_VENV_DIR
 fi
-source $VENV_DIR/bin/activate
+source $SETUP_VENV_DIR/bin/activate
 pip install --upgrade pip
 pip install uv
 "
 
 # -----------------------
-# STEP 3: Build backend
+# STEP 5: Build backend
 # -----------------------
 log ""
-log "=== Step 3: Building backend ==="
+log "=== Step 5: Building backend ==="
 run_as_user "
 cd $REPO_PATH
-source $VENV_DIR/bin/activate
+source $SETUP_VENV_DIR/bin/activate
 uv sync --all-groups
 "
 
 # -----------------------
-# STEP 4: Build frontend
+# STEP 6: Build frontend
 # -----------------------
 log ""
-log "=== Step 4: Building frontend ==="
+log "=== Step 6: Building frontend ==="
 if run_as_user "[ -d '$REPO_PATH/$FRONTEND_DIR' ]"; then
     run_as_user "
 cd $REPO_PATH
@@ -174,10 +176,10 @@ else
 fi
 
 # -----------------------
-# STEP 4b: Deploy frontend to web root
+# STEP 7: Deploy frontend to web root
 # -----------------------
 log ""
-log "=== Step 4b: Copying frontend build to /var/www/html ==="
+log "=== Step 7: Copying frontend build to /var/www/html ==="
 
 FRONTEND_BUILD_DIR="${REPO_PATH}/${FRONTEND_DIR}/dist"
 WEB_ROOT="/var/www/html"
@@ -197,10 +199,10 @@ else
 fi
 
 # -----------------------
-# STEP 5: Optional Nginx configuration
+# STEP 8: Optional Nginx configuration
 # -----------------------
 log ""
-log "=== Step 5: Optional Nginx configuration ==="
+log "=== Step 8: Optional Nginx configuration ==="
 
 read -r -p "Do you want to configure Nginx for the AMWA frontend? [yes/no]: " CONFIGURE_NGINX
 if [[ "$CONFIGURE_NGINX" != "yes" ]]; then
@@ -257,10 +259,10 @@ else
 fi
 
 # -----------------------
-# STEP 6: Optional ANT+ USB setup
+# STEP 9: Optional ANT+ USB setup
 # -----------------------
 log ""
-log "=== Step 6: Optional ANT+ USB adapter setup ==="
+log "=== Step 9: Optional ANT+ USB adapter setup ==="
 read -r -p "Do you want to configure the ANT+ USB adapter? [yes/no]: " ANTUSB_CHOICE
 
 if [[ "$ANTUSB_CHOICE" == "yes" ]]; then
@@ -293,13 +295,14 @@ else
 fi
 
 # -----------------------
-# STEP 7: Install systemd service
+# STEP 10: Install systemd service
 # -----------------------
 log ""
-log "=== Step 7: Optional systemd service installation ==="
-read -r -p "Do you want to install and start the AMWA systemd service? [yes/no]: " INSTALL_SERVICE_CHOICE
+log "=== STEP 10: Install systemd service ==="
 
-if [[ "$INSTALL_SERVICE_CHOICE" == "yes" ]]; then
+read -r -p "Install AMWA service? [yes/no]: " INSTALL_SERVICE
+
+if [[ "$INSTALL_SERVICE" == "yes" ]]; then
 
     SERVICE_SRC="${REPO_PATH}/scripts/amwa.service"
 
@@ -309,25 +312,22 @@ if [[ "$INSTALL_SERVICE_CHOICE" == "yes" ]]; then
     fi
 
     if [ -f "$SERVICE_FILE" ]; then
-        log "Warning: Service file already exists. Backing up..."
+        log "Backing up existing service..."
         cp "$SERVICE_FILE" "${SERVICE_FILE}.bak"
     fi
 
     cp "$SERVICE_SRC" "$SERVICE_FILE"
 
-    sed -i "s|ExecStart=.*|ExecStart=${REPO_PATH}/scripts/start.sh|" "$SERVICE_FILE"
-    sed -i "s|WorkingDirectory=.*|WorkingDirectory=${REPO_PATH}|" "$SERVICE_FILE"
     sed -i "s|User=.*|User=${CURRENT_USER}|" "$SERVICE_FILE"
+    sed -i "s|WorkingDirectory=.*|WorkingDirectory=${REPO_PATH}|" "$SERVICE_FILE"
+    sed -i "s|/home/pi/amwa|${REPO_PATH}|g" "$SERVICE_FILE"
 
     systemctl daemon-reload
     systemctl enable amwa
-    systemctl start amwa
+    systemctl restart amwa
 
-    log ""
-    log "=== Step 8: Service status ==="
     systemctl status amwa --no-pager
-else
-    log "Skipping systemd service installation."
+
 fi
 
 log ""

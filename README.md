@@ -99,3 +99,26 @@ The script will
   - create a udev rule for the ANT+ usb adapter
 - create systemctl service
 
+
+sudo vim /etc/systemd/system/wifi-powersave@.service
+
+[Unit]
+Description=Set WiFi power save %i
+After=sys-subsystem-net-devices-wlan0.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/iw dev wlan0 set power_save %i
+
+[Install]
+WantedBy=sys-subsystem-net-devices-wlan0.device
+
+sudo systemctl daemon-reload
+
+sudo systemctl start wifi-powersave@on.service
+sudo systemctl stop wifi-powersave@off.service
+
+sudo systemctl enable wifi-powersave@off.service
+
+systemctl status wifi-powersave@off.service
