@@ -5,6 +5,9 @@
 It enables monitoring of cycling and fitness metrics from ANT+ sensors through a lightweight web interface.
 
 ![AMWA UI](doc/ui.png)
+![AMWA UI](doc/setup_1.png)
+![AMWA UI](doc/setup_2.png)
+![AMWA UI](doc/setup_3.png)
 
 ---
 
